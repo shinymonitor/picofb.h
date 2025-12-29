@@ -1,16 +1,14 @@
-<div align="center">
-    <img src="assets/LOGO.png", width="200"/>
-    <h1>picofb.h</h1>
-</div>
+# picofb
 
-A minimal single-header framebuffer library for quickly getting pixels on screen with multi input handling
+A minimal single-header cross-platform library for displaying a framebuffer on screen with multi input handling
 
 ## Features
 
 - Simple API: init, set pixels, update, cleanup
-- Two implementations (API compatible with both):
-  - **X11**: Faster performance (~2x FPS), Linux/X11 only
-  - **SDL2**: Cross-platform (Linux/Windows/Mac)
+- Many implementations (Auto backend select):
+  - **X11**: Linux/X11 only
+  - **WIN32**: Windows only
+  - **SDL2**: Cross-platform (Linux/Windows/Mac), Slower
 - Save framebuffer to PPM image format
 - Configurable resolution via compile-time defines
 
@@ -19,14 +17,15 @@ A minimal single-header framebuffer library for quickly getting pixels on screen
 - Easy render testing
 
 ## Usage
-See `example.c`
+See `example.c` and docs section in `picofb.h`
 
 ## Compilation
 
-```bash
-gcc example.c -o example -lSDL2
-```
-or define `PICOFB_X11_BACKEND` use X11 
-```bash
-gcc example.c -o example -lX11 
-```
+Link with:
+- Linux/X11: -lX11
+- Windows: None
+- Others: -SDL2
+
+## TODO
+
+- Wayland

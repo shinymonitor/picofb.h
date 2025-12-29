@@ -1,4 +1,34 @@
-#pragma once
+//================================================================
+// DOCS
+//================================================================
+// Guidelines
+// - Define PICOFB_WIDTH and PICOFB_HEIGHT before including
+// - Allocate a zero initialized PICOFB_Window to store state and pass to API
+// - use PICOFB_Window.quit to loop
+// - See PICOFB_Key for the keyboard input enum
+// - Define PICOFB_BACKEND_OVERRIDE and then PICOFB_<X11/WIN32/WAYLAND/SDL>_BACKEND to override backend select
+//
+// API:
+// - bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window)                - initialize and present a window with a window title string
+// - void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color) - set the frame buffer pixel at x, y to a color
+// - uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b)                              - returns a cross-platform color value to be used in set pixel function
+// - void PICOFB_update(PICOFB_Window* picofb_window)                                        - updates the window to display the frame buffer and gets user input
+// - bool PICOFB_is_input(PICOFB_Window* picofb_window, PICOFB_Key key)                      - check if the key was pressed last frame
+// - void PICOFB_cleanup(PICOFB_Window* picofb_window)                                       - cleanup the window
+// - void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path)                    - save the frame buffer to a ppm file
+// 
+// User visible fields of PICOFB_Window (cross-platform):
+//     uint32_t frame_buffer[PICOFB_HEIGHT][PICOFB_WIDTH];
+//     bool key_states[PICOFB_Key_COUNT];
+//     bool quit;
+//
+
+//================================================================
+// PICOFB
+//================================================================
+
+#ifndef _PICOFB_H
+#define _PICOFB_H
 
 #ifndef PICOFB_WIDTH
 #define PICOFB_WIDTH 640
@@ -7,10 +37,18 @@
 #define PICOFB_HEIGHT 360
 #endif
 
+//================================================================
+// UNIVERSAL INCLUDES
+//================================================================
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+//================================================================
+// PICOFB_Key
+//================================================================
 
 typedef enum {
     PICOFB_Key_UNKNOWN = 0,
@@ -54,6 +92,35 @@ typedef enum {
     PICOFB_Key_COUNT
 } PICOFB_Key;
 
+//================================================================
+// BACKEND SELECT
+//================================================================
+
+#ifndef PICOFB_BACKEND_OVERRIDE
+
+#ifdef _WIN32
+#define PICOFB_WIN32_BACKEND
+#else
+
+#ifdef __linux__
+#ifdef PICOFB_WAYLAND
+#define PICOFB_WAYLAND_BACKEND
+#else
+#define PICOFB_X11_BACKEND
+#endif
+
+#else
+#define PICOFB_SDL_BACKEND
+#endif
+
+#endif
+
+#endif // !(PICOFB_BACKEND_OVERRIDE)
+
+//================================================================
+// BACKEND IMPLEMENTATIONS
+//================================================================
+
 #ifdef PICOFB_X11_BACKEND
 
 #include <X11/Xlib.h>
@@ -73,45 +140,7 @@ typedef struct {
     XEvent event;
 } PICOFB_Window;
 
-static int PICOFB_destroy_image(XImage *img) {free(img); return 0;}
-static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window) {
-    if (!picofb_window) return false;
-    picofb_window->display = XOpenDisplay(NULL);
-    if (picofb_window->display == NULL) return false;
-    picofb_window->window = XCreateSimpleWindow(picofb_window->display, XDefaultRootWindow(picofb_window->display), 0, 0, PICOFB_WIDTH, PICOFB_HEIGHT, 0, 0, 0);
-    if (!XGetWindowAttributes(picofb_window->display, picofb_window->window, &picofb_window->wa)) {
-        XDestroyWindow(picofb_window->display, picofb_window->window);
-        XCloseDisplay(picofb_window->display);
-        return false;
-    }
-    picofb_window->quit = false;
-    picofb_window->image = XCreateImage(picofb_window->display, picofb_window->wa.visual, picofb_window->wa.depth, ZPixmap, 0, (char*) picofb_window->frame_buffer, PICOFB_WIDTH, PICOFB_HEIGHT, 32, PICOFB_WIDTH * sizeof(uint32_t));
-    if (!picofb_window->image) {
-        XDestroyWindow(picofb_window->display, picofb_window->window);
-        XCloseDisplay(picofb_window->display);
-        return false;
-    }
-    picofb_window->image->f.destroy_image = PICOFB_destroy_image;
-    picofb_window->gc = XCreateGC(picofb_window->display, picofb_window->window, 0, NULL);
-    if (!picofb_window->gc) {
-        XDestroyImage(picofb_window->image);
-        XDestroyWindow(picofb_window->display, picofb_window->window);
-        XCloseDisplay(picofb_window->display);
-        return false;
-    }
-    picofb_window->wm_delete_window = XInternAtom(picofb_window->display, "WM_DELETE_WINDOW", False);
-    XSetWMProtocols(picofb_window->display, picofb_window->window, &picofb_window->wm_delete_window, 1);
-    XSelectInput(picofb_window->display, picofb_window->window, KeyPressMask | KeyReleaseMask | ExposureMask | StructureNotifyMask);
-    if (window_title) XStoreName(picofb_window->display, picofb_window->window, window_title);
-    XMapWindow(picofb_window->display, picofb_window->window);
-    XFlush(picofb_window->display);
-    return true;
-}
-
-static inline uint32_t PICOFB_pixel_rgb(uint8_t r, uint8_t g, uint8_t b){return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
-static inline void PICOFB_set_pixel(PICOFB_Window* w, int x, int y, uint32_t pixel){w->frame_buffer[y][x] = pixel;}
-
-static inline PICOFB_Key PICOFB_from_x11_keysym(KeySym key) {
+static inline PICOFB_Key PICOFB_from_x11_keysym(KeySym key){
     switch(key) {
         // Letters
         case XK_a: return PICOFB_Key_a;
@@ -228,6 +257,49 @@ static inline PICOFB_Key PICOFB_from_x11_keysym(KeySym key) {
     }
 }
 
+static int PICOFB_destroy_image(XImage *img) {(void)img; return 0;}
+static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window) {
+    if (!picofb_window) return false;
+    picofb_window->display = XOpenDisplay(NULL);
+    if (picofb_window->display == NULL) return false;
+    picofb_window->window = XCreateSimpleWindow(picofb_window->display, XDefaultRootWindow(picofb_window->display), 0, 0, PICOFB_WIDTH, PICOFB_HEIGHT, 0, 0, 0);
+    if (!XGetWindowAttributes(picofb_window->display, picofb_window->window, &picofb_window->wa)) {
+        XDestroyWindow(picofb_window->display, picofb_window->window);
+        XCloseDisplay(picofb_window->display);
+        return false;
+    }
+    picofb_window->quit = false;
+    picofb_window->image = XCreateImage(picofb_window->display, picofb_window->wa.visual, picofb_window->wa.depth, ZPixmap, 0, (char*) picofb_window->frame_buffer, PICOFB_WIDTH, PICOFB_HEIGHT, 32, PICOFB_WIDTH * sizeof(uint32_t));
+    if (!picofb_window->image) {
+        XDestroyWindow(picofb_window->display, picofb_window->window);
+        XCloseDisplay(picofb_window->display);
+        return false;
+    }
+    picofb_window->image->f.destroy_image = PICOFB_destroy_image;
+    picofb_window->gc = XCreateGC(picofb_window->display, picofb_window->window, 0, NULL);
+    if (!picofb_window->gc) {
+        XDestroyImage(picofb_window->image);
+        XDestroyWindow(picofb_window->display, picofb_window->window);
+        XCloseDisplay(picofb_window->display);
+        return false;
+    }
+    picofb_window->wm_delete_window = XInternAtom(picofb_window->display, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(picofb_window->display, picofb_window->window, &picofb_window->wm_delete_window, 1);
+    XSelectInput(picofb_window->display, picofb_window->window, KeyPressMask | KeyReleaseMask | ExposureMask | StructureNotifyMask);
+    XStoreName(picofb_window->display, picofb_window->window, window_title ? window_title : "PICOFB");
+    XMapWindow(picofb_window->display, picofb_window->window);
+    XSizeHints hints = {0};
+    hints.flags = PMinSize | PMaxSize;
+    hints.min_width = hints.max_width = PICOFB_WIDTH;
+    hints.min_height = hints.max_height = PICOFB_HEIGHT;
+    XSetWMNormalHints(picofb_window->display, picofb_window->window, &hints);
+    XFlush(picofb_window->display);
+    return true;
+}
+
+static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b) {return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
+static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y][x] = color;}
+
 static inline void PICOFB_update(PICOFB_Window* picofb_window) {
     while (XPending(picofb_window->display) > 0) {
         XNextEvent(picofb_window->display, &picofb_window->event);
@@ -277,7 +349,311 @@ static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *pat
     fclose(f);
 }
 
-#else // PICOFB_X11_BACKEND
+#endif // PICOFB_X11_BACKEND
+
+#ifdef PICOFB_WIN32_BACKEND
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <string.h>
+
+typedef struct {
+    uint32_t frame_buffer[PICOFB_HEIGHT][PICOFB_WIDTH];
+    bool key_states[PICOFB_Key_COUNT];
+    bool quit;
+
+    HWND hwnd;
+    HDC hdc;
+    HDC hdc_mem;
+    HBITMAP hbitmap;
+    HBITMAP hbitmap_old;
+    WNDCLASSEX wc;
+    char class_name_storage[64];
+    void* dib_bits;
+} PICOFB_Window;
+
+static inline PICOFB_Key PICOFB_from_win32_vk(WPARAM vk, LPARAM lparam) {
+    bool extended = (lparam & 0x01000000) != 0;
+    switch(vk) {
+        // Letters
+        case 'A': return PICOFB_Key_a;
+        case 'B': return PICOFB_Key_b;
+        case 'C': return PICOFB_Key_c;
+        case 'D': return PICOFB_Key_d;
+        case 'E': return PICOFB_Key_e;
+        case 'F': return PICOFB_Key_f;
+        case 'G': return PICOFB_Key_g;
+        case 'H': return PICOFB_Key_h;
+        case 'I': return PICOFB_Key_i;
+        case 'J': return PICOFB_Key_j;
+        case 'K': return PICOFB_Key_k;
+        case 'L': return PICOFB_Key_l;
+        case 'M': return PICOFB_Key_m;
+        case 'N': return PICOFB_Key_n;
+        case 'O': return PICOFB_Key_o;
+        case 'P': return PICOFB_Key_p;
+        case 'Q': return PICOFB_Key_q;
+        case 'R': return PICOFB_Key_r;
+        case 'S': return PICOFB_Key_s;
+        case 'T': return PICOFB_Key_t;
+        case 'U': return PICOFB_Key_u;
+        case 'V': return PICOFB_Key_v;
+        case 'W': return PICOFB_Key_w;
+        case 'X': return PICOFB_Key_x;
+        case 'Y': return PICOFB_Key_y;
+        case 'Z': return PICOFB_Key_z;
+        // Numbers
+        case '0': return PICOFB_Key_0;
+        case '1': return PICOFB_Key_1;
+        case '2': return PICOFB_Key_2;
+        case '3': return PICOFB_Key_3;
+        case '4': return PICOFB_Key_4;
+        case '5': return PICOFB_Key_5;
+        case '6': return PICOFB_Key_6;
+        case '7': return PICOFB_Key_7;
+        case '8': return PICOFB_Key_8;
+        case '9': return PICOFB_Key_9;
+        // Function keys
+        case VK_F1: return PICOFB_Key_F1;
+        case VK_F2: return PICOFB_Key_F2;
+        case VK_F3: return PICOFB_Key_F3;
+        case VK_F4: return PICOFB_Key_F4;
+        case VK_F5: return PICOFB_Key_F5;
+        case VK_F6: return PICOFB_Key_F6;
+        case VK_F7: return PICOFB_Key_F7;
+        case VK_F8: return PICOFB_Key_F8;
+        case VK_F9: return PICOFB_Key_F9;
+        case VK_F10: return PICOFB_Key_F10;
+        case VK_F11: return PICOFB_Key_F11;
+        case VK_F12: return PICOFB_Key_F12;
+        // Arrow keys
+        case VK_UP: return PICOFB_Key_UP;
+        case VK_DOWN: return PICOFB_Key_DOWN;
+        case VK_LEFT: return PICOFB_Key_LEFT;
+        case VK_RIGHT: return PICOFB_Key_RIGHT;
+        // Control keys
+        case VK_ESCAPE: return PICOFB_Key_ESC;
+        case VK_SPACE: return PICOFB_Key_SPACE;
+        case VK_RETURN: return extended ? PICOFB_Key_KP_ENTER : PICOFB_Key_ENTER;
+        case VK_TAB: return PICOFB_Key_TAB;
+        case VK_BACK: return PICOFB_Key_BACKSPACE;
+        case VK_DELETE: return PICOFB_Key_DELETE;
+        case VK_INSERT: return PICOFB_Key_INSERT;
+        case VK_HOME: return PICOFB_Key_HOME;
+        case VK_END: return PICOFB_Key_END;
+        case VK_PRIOR: return PICOFB_Key_PAGEUP;
+        case VK_NEXT: return PICOFB_Key_PAGEDOWN;
+        // Modifiers
+        case VK_SHIFT: return MapVirtualKey(VK_RSHIFT, MAPVK_VK_TO_VSC) == ((lparam >> 16) & 0xFF) ? PICOFB_Key_RSHIFT : PICOFB_Key_LSHIFT;
+        case VK_CONTROL: return extended ? PICOFB_Key_RCTRL : PICOFB_Key_LCTRL;
+        case VK_MENU: return extended ? PICOFB_Key_RALT : PICOFB_Key_LALT;
+        case VK_LWIN: return PICOFB_Key_LSUPER;
+        case VK_RWIN: return PICOFB_Key_RSUPER;
+        // Punctuation
+        case VK_OEM_MINUS: return PICOFB_Key_MINUS;
+        case VK_OEM_PLUS: return PICOFB_Key_EQUALS;
+        case VK_OEM_4: return PICOFB_Key_LBRACKET;
+        case VK_OEM_6: return PICOFB_Key_RBRACKET;
+        case VK_OEM_5: return PICOFB_Key_BACKSLASH;
+        case VK_OEM_1: return PICOFB_Key_SEMICOLON;
+        case VK_OEM_7: return PICOFB_Key_APOSTROPHE;
+        case VK_OEM_COMMA: return PICOFB_Key_COMMA;
+        case VK_OEM_PERIOD: return PICOFB_Key_PERIOD;
+        case VK_OEM_2: return PICOFB_Key_SLASH;
+        case VK_OEM_3: return PICOFB_Key_GRAVE;
+        // Numpad
+        case VK_NUMPAD0: return PICOFB_Key_KP_0;
+        case VK_NUMPAD1: return PICOFB_Key_KP_1;
+        case VK_NUMPAD2: return PICOFB_Key_KP_2;
+        case VK_NUMPAD3: return PICOFB_Key_KP_3;
+        case VK_NUMPAD4: return PICOFB_Key_KP_4;
+        case VK_NUMPAD5: return PICOFB_Key_KP_5;
+        case VK_NUMPAD6: return PICOFB_Key_KP_6;
+        case VK_NUMPAD7: return PICOFB_Key_KP_7;
+        case VK_NUMPAD8: return PICOFB_Key_KP_8;
+        case VK_NUMPAD9: return PICOFB_Key_KP_9;
+        case VK_MULTIPLY: return PICOFB_Key_KP_MULTIPLY;
+        case VK_ADD: return PICOFB_Key_KP_PLUS;
+        case VK_SUBTRACT: return PICOFB_Key_KP_MINUS;
+        case VK_DIVIDE: return PICOFB_Key_KP_DIVIDE;
+        case VK_DECIMAL: return PICOFB_Key_KP_PERIOD;
+        // Lock keys
+        case VK_CAPITAL: return PICOFB_Key_CAPSLOCK;
+        case VK_NUMLOCK: return PICOFB_Key_NUMLOCK;
+        case VK_SCROLL: return PICOFB_Key_SCROLLLOCK;
+        
+        default: return PICOFB_Key_UNKNOWN;
+    }
+}
+
+static LRESULT CALLBACK PICOFB_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+    PICOFB_Window* window = (PICOFB_Window*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    switch (msg) {
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN: {
+            if (window) {
+                PICOFB_Key key = PICOFB_from_win32_vk(wparam, lparam);
+                if (key != PICOFB_Key_UNKNOWN && !(lparam & 0x40000000)) window->key_states[key] = true;
+            }
+            return 0;
+        }
+        case WM_KEYUP:
+        case WM_SYSKEYUP: {
+            if (window) {
+                PICOFB_Key key = PICOFB_from_win32_vk(wparam, lparam);
+                if (key != PICOFB_Key_UNKNOWN) window->key_states[key] = false;
+            }
+            return 0;
+        }
+        case WM_CLOSE: if (window) window->quit = true; return 0;
+        case WM_DESTROY: PostQuitMessage(0); return 0;
+        default: return DefWindowProc(hwnd, msg, wparam, lparam);
+    }
+}
+static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window) {
+    if (!picofb_window) return false;
+    snprintf(picofb_window->class_name_storage, sizeof(picofb_window->class_name_storage), "PICOFB_%p", (void*)picofb_window);
+    picofb_window->wc.cbSize = sizeof(WNDCLASSEX);
+    picofb_window->wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+    picofb_window->wc.lpfnWndProc = PICOFB_window_proc;
+    picofb_window->wc.cbClsExtra = 0;
+    picofb_window->wc.cbWndExtra = 0;
+    picofb_window->wc.hInstance = GetModuleHandle(NULL);
+    picofb_window->wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    picofb_window->wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    picofb_window->wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    picofb_window->wc.lpszMenuName = NULL;
+    picofb_window->wc.lpszClassName = picofb_window->class_name_storage;
+    picofb_window->wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
+    if (!RegisterClassEx(&picofb_window->wc)) return false;
+    RECT rect = {0, 0, PICOFB_WIDTH, PICOFB_HEIGHT};
+    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+    AdjustWindowRect(&rect, style, FALSE);
+    picofb_window->hwnd = CreateWindowEx(0, picofb_window->class_name_storage, window_title ? window_title : "PICOFB", style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, GetModuleHandle(NULL), NULL);
+    if (!picofb_window->hwnd) {UnregisterClass(picofb_window->class_name_storage, GetModuleHandle(NULL)); return false;}
+    SetWindowLongPtr(picofb_window->hwnd, GWLP_USERDATA, (LONG_PTR)picofb_window);
+    picofb_window->hdc = GetDC(picofb_window->hwnd);
+    if (!picofb_window->hdc) {
+        DestroyWindow(picofb_window->hwnd);
+        UnregisterClass(picofb_window->class_name_storage, GetModuleHandle(NULL));
+        return false;
+    }
+    picofb_window->hdc_mem = CreateCompatibleDC(picofb_window->hdc);
+    if (!picofb_window->hdc_mem) {
+        ReleaseDC(picofb_window->hwnd, picofb_window->hdc);
+        DestroyWindow(picofb_window->hwnd);
+        UnregisterClass(picofb_window->class_name_storage, GetModuleHandle(NULL));
+        return false;
+    }
+    BITMAPINFO bmi = {0};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = PICOFB_WIDTH;
+    bmi.bmiHeader.biHeight = -PICOFB_HEIGHT;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    picofb_window->hbitmap = CreateDIBSection(picofb_window->hdc_mem, &bmi, DIB_RGB_COLORS, &picofb_window->dib_bits, NULL, 0);
+    if (!picofb_window->hbitmap) {
+        DeleteDC(picofb_window->hdc_mem);
+        ReleaseDC(picofb_window->hwnd, picofb_window->hdc);
+        DestroyWindow(picofb_window->hwnd);
+        UnregisterClass(picofb_window->class_name_storage, GetModuleHandle(NULL));
+        return false;
+    }
+    picofb_window->hbitmap_old = (HBITMAP)SelectObject(picofb_window->hdc_mem, picofb_window->hbitmap);
+    ShowWindow(picofb_window->hwnd, SW_SHOW);
+    UpdateWindow(picofb_window->hwnd);
+    return true;
+}
+
+static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b) {return (0xFFu << 24) | ((uint32_t)b << 16) | ((uint32_t)g << 8) | (uint32_t)r;}
+static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y][x] = color;}
+
+static inline void PICOFB_update(PICOFB_Window* picofb_window) {
+    MSG msg;
+    while (PeekMessage(&msg, picofb_window->hwnd, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+        if (msg.message == WM_QUIT) picofb_window->quit = true;
+    }
+    memcpy(picofb_window->dib_bits, picofb_window->frame_buffer, PICOFB_WIDTH * PICOFB_HEIGHT * sizeof(uint32_t));
+    BitBlt(picofb_window->hdc, 0, 0, PICOFB_WIDTH, PICOFB_HEIGHT, picofb_window->hdc_mem, 0, 0, SRCCOPY);
+}
+
+static inline bool PICOFB_is_input(PICOFB_Window* picofb_window, PICOFB_Key key) {
+    if (key < 0 || key >= PICOFB_Key_COUNT) return false;
+    return picofb_window->key_states[key];
+}
+
+static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
+    if (picofb_window->hbitmap) {
+        if (picofb_window->hdc_mem && picofb_window->hbitmap_old) SelectObject(picofb_window->hdc_mem, picofb_window->hbitmap_old);
+        DeleteObject(picofb_window->hbitmap);
+    }
+    if (picofb_window->hdc_mem) DeleteDC(picofb_window->hdc_mem);
+    if (picofb_window->hdc && picofb_window->hwnd) ReleaseDC(picofb_window->hwnd, picofb_window->hdc);
+    if (picofb_window->hwnd) DestroyWindow(picofb_window->hwnd);
+    if (picofb_window->class_name_storage) UnregisterClass(picofb_window->class_name_storage, GetModuleHandle(NULL));
+}
+
+static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return;
+    fprintf(f, "P6 %d %d 255\n", PICOFB_WIDTH, PICOFB_HEIGHT);
+    for (int y = 0; y < PICOFB_HEIGHT; y++) {
+        for (int x = 0; x < PICOFB_WIDTH; x++) {
+            uint32_t px = picofb_window->frame_buffer[y][x];
+            unsigned char rgb[3] = { px & 0xFF, (px >> 8) & 0xFF, (px >> 16) & 0xFF };
+            fwrite(rgb, 1, 3, f);
+        }
+    }
+    fclose(f);
+}
+
+#endif // PICOFB_WIN32_BACKEND
+
+#ifdef PICOFB_WAYLAND_BACKEND
+
+// ///////////////////////////////////WIP///////////////////////////////////////////
+
+#include <wayland-client.h>
+
+typedef struct {
+    uint32_t frame_buffer[PICOFB_HEIGHT][PICOFB_WIDTH];
+    bool key_states[PICOFB_Key_COUNT];
+    bool quit;
+
+    struct wl_display *display;
+} PICOFB_Window;
+
+//static inline PICOFB_Key PICOFB_from_sdl_scancode(SDL_Scancode sc);
+
+static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window){
+    if (!picofb_window) return false;
+    picofb_window->display = wl_display_connect(NULL);
+    if (!picofb_window->display) return false;
+    return true;
+}
+
+static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b){return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
+static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y][x] = color;}
+
+static inline void PICOFB_update(PICOFB_Window* picofb_window){
+    picofb_window->quit = wl_display_dispatch(display)==-1;
+}
+static inline bool PICOFB_is_input(PICOFB_Window* picofb_window, PICOFB_Key key){
+    return true;
+}
+static inline void PICOFB_cleanup(PICOFB_Window* picofb_window){
+    wl_display_disconnect(picofb_window->display);
+}
+static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path){
+
+}
+
+#endif // PICOFB_WAYLAND_BACKEND
+
+#ifdef PICOFB_SDL_BACKEND
 
 #include <SDL2/SDL.h>
 
@@ -291,18 +667,6 @@ typedef struct {
     SDL_Texture* texture;
     SDL_Event event;
 } PICOFB_Window;
-
-static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window) {
-    SDL_Init(SDL_INIT_VIDEO);
-    picofb_window->window = SDL_CreateWindow(window_title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, PICOFB_WIDTH, PICOFB_HEIGHT, 0);
-    picofb_window->renderer = SDL_CreateRenderer(picofb_window->window, -1, SDL_RENDERER_ACCELERATED);
-    picofb_window->texture = SDL_CreateTexture(picofb_window->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, PICOFB_WIDTH, PICOFB_HEIGHT);
-    if (!(picofb_window->window && picofb_window->renderer && picofb_window->texture)) return false;
-    return true;
-}
-
-static inline uint32_t PICOFB_pixel_rgb(uint8_t r, uint8_t g, uint8_t b){return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
-static inline void PICOFB_set_pixel(PICOFB_Window* w, int x, int y, uint32_t pixel){w->frame_buffer[y][x] = pixel;}
 
 static inline PICOFB_Key PICOFB_from_sdl_scancode(SDL_Scancode sc) {
     switch(sc) {
@@ -421,6 +785,19 @@ static inline PICOFB_Key PICOFB_from_sdl_scancode(SDL_Scancode sc) {
     }
 }
 
+static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window) {
+    if (!picofb_window) return false;
+    SDL_Init(SDL_INIT_VIDEO);
+    picofb_window->window = SDL_CreateWindow(window_title ? window_title : "PICOFB", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, PICOFB_WIDTH, PICOFB_HEIGHT, 0);
+    picofb_window->renderer = SDL_CreateRenderer(picofb_window->window, -1, SDL_RENDERER_ACCELERATED);
+    picofb_window->texture = SDL_CreateTexture(picofb_window->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, PICOFB_WIDTH, PICOFB_HEIGHT);
+    if (!(picofb_window->window && picofb_window->renderer && picofb_window->texture)) return false;
+    return true;
+}
+
+static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b){return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
+static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y][x] = color;}
+
 static inline void PICOFB_update(PICOFB_Window* picofb_window) {
     SDL_UpdateTexture(picofb_window->texture, NULL, picofb_window->frame_buffer, PICOFB_WIDTH * sizeof(uint32_t));
     SDL_RenderClear(picofb_window->renderer);
@@ -471,4 +848,6 @@ static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *pat
     fclose(f);
 }
 
-#endif // PICOFB_X11_BACKEND
+#endif // PICOFB_SDL_BACKEND
+
+#endif // _PICOFB_H
