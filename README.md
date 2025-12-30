@@ -1,4 +1,7 @@
-# picofb
+<div align="center">
+    <img src="assets/LOGO.png", width="200"/>
+    <h1>picofb.h</h1>
+</div>
 
 A minimal single-header cross-platform library for displaying a framebuffer on screen with multi input handling
 
@@ -8,7 +11,7 @@ A minimal single-header cross-platform library for displaying a framebuffer on s
 - Many implementations (Auto backend select):
   - **X11**: Linux/X11 only
   - **WIN32**: Windows only
-  - **SDL2**: Cross-platform (Linux/Windows/Mac), Slower
+  - **SDL2**: Cross-platform (Linux/Windows/Mac), Slower, Fallback
 - Save framebuffer to PPM image format
 - Configurable resolution via compile-time defines
 
@@ -29,3 +32,4 @@ Link with:
 ## TODO
 
 - Wayland
+- Mouse handling
