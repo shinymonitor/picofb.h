@@ -27,7 +27,7 @@ See `example.c` and docs section in `picofb.h`
 Link with:
 - Linux/X11: -lX11
 - Windows: None
-- Others: -SDL2
+- Others: -lSDL2
 
 ## TODO
 
