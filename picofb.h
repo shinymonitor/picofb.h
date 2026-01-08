@@ -2,23 +2,24 @@
 // DOCS
 //================================================================
 // Guidelines
-// - Define PICOFB_WIDTH and PICOFB_HEIGHT before including
 // - Allocate a zero initialized PICOFB_Window to store state and pass to API
 // - use PICOFB_Window.quit to loop
 // - See PICOFB_Key for the keyboard input enum
 // - Define PICOFB_BACKEND_OVERRIDE and then PICOFB_<X11/WIN32/WAYLAND/SDL>_BACKEND to override backend select
 //
 // API:
-// - bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window)                - initialize and present a window with a window title string
-// - void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color) - set the frame buffer pixel at x, y to a color
-// - uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b)                              - returns a cross-platform color value to be used in set pixel function
-// - void PICOFB_update(PICOFB_Window* picofb_window)                                        - updates the window to display the frame buffer and gets user input
-// - bool PICOFB_is_input(PICOFB_Window* picofb_window, PICOFB_Key key)                      - check if the key was pressed last frame
-// - void PICOFB_cleanup(PICOFB_Window* picofb_window)                                       - cleanup the window
-// - void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path)                    - save the frame buffer to a ppm file
+// - bool PICOFB_init(const char* window_title, size_t width, size_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) - initialize and present a window with a window title string
+// - void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color)                                       - set the frame buffer pixel at x, y to a color
+// - uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b)                                                                    - returns a cross-platform color value to be used in set pixel function
+// - void PICOFB_update(PICOFB_Window* picofb_window)                                                                              - updates the window to display the frame buffer and gets user input
+// - bool PICOFB_is_input(PICOFB_Window* picofb_window, PICOFB_Key key)                                                            - check if the key was pressed last frame
+// - void PICOFB_cleanup(PICOFB_Window* picofb_window)                                                                             - cleanup the window
+// - void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path)                                                          - save the frame buffer to a ppm file
 // 
 // User visible fields of PICOFB_Window (cross-platform):
-//     uint32_t frame_buffer[PICOFB_HEIGHT][PICOFB_WIDTH];
+//     size_t width;
+//     size_t height;
+//     uint32_t* frame_buffer;
 //     bool key_states[PICOFB_Key_COUNT];
 //     bool quit;
 //
@@ -29,13 +30,6 @@
 
 #ifndef _PICOFB_H
 #define _PICOFB_H
-
-#ifndef PICOFB_WIDTH
-#define PICOFB_WIDTH 640
-#endif
-#ifndef PICOFB_HEIGHT
-#define PICOFB_HEIGHT 360
-#endif
 
 //================================================================
 // UNIVERSAL INCLUDES
@@ -127,7 +121,9 @@ typedef enum {
 #include <X11/Xutil.h>
 
 typedef struct {
-    uint32_t frame_buffer[PICOFB_HEIGHT][PICOFB_WIDTH];
+    size_t width;
+    size_t height;
+    uint32_t* frame_buffer;
     bool key_states[PICOFB_Key_COUNT];
     bool quit;
 
@@ -258,18 +254,20 @@ static inline PICOFB_Key PICOFB_from_x11_keysym(KeySym key){
 }
 
 static int PICOFB_destroy_image(XImage *img) {(void)img; return 0;}
-static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window) {
-    if (!picofb_window) return false;
+static inline bool PICOFB_init(const char* window_title, size_t width, size_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) {
+    if (!picofb_window || !frame_buffer) return false;
+    picofb_window->width=width; picofb_window->height=height; 
+    picofb_window->frame_buffer=frame_buffer;
     picofb_window->display = XOpenDisplay(NULL);
     if (picofb_window->display == NULL) return false;
-    picofb_window->window = XCreateSimpleWindow(picofb_window->display, XDefaultRootWindow(picofb_window->display), 0, 0, PICOFB_WIDTH, PICOFB_HEIGHT, 0, 0, 0);
+    picofb_window->window = XCreateSimpleWindow(picofb_window->display, XDefaultRootWindow(picofb_window->display), 0, 0, width, height, 0, 0, 0);
     if (!XGetWindowAttributes(picofb_window->display, picofb_window->window, &picofb_window->wa)) {
         XDestroyWindow(picofb_window->display, picofb_window->window);
         XCloseDisplay(picofb_window->display);
         return false;
     }
     picofb_window->quit = false;
-    picofb_window->image = XCreateImage(picofb_window->display, picofb_window->wa.visual, picofb_window->wa.depth, ZPixmap, 0, (char*) picofb_window->frame_buffer, PICOFB_WIDTH, PICOFB_HEIGHT, 32, PICOFB_WIDTH * sizeof(uint32_t));
+    picofb_window->image = XCreateImage(picofb_window->display, picofb_window->wa.visual, picofb_window->wa.depth, ZPixmap, 0, (char*) picofb_window->frame_buffer, width, height, 32, width * sizeof(uint32_t));
     if (!picofb_window->image) {
         XDestroyWindow(picofb_window->display, picofb_window->window);
         XCloseDisplay(picofb_window->display);
@@ -290,15 +288,15 @@ static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_w
     XMapWindow(picofb_window->display, picofb_window->window);
     XSizeHints hints = {0};
     hints.flags = PMinSize | PMaxSize;
-    hints.min_width = hints.max_width = PICOFB_WIDTH;
-    hints.min_height = hints.max_height = PICOFB_HEIGHT;
+    hints.min_width = hints.max_width = width;
+    hints.min_height = hints.max_height = height;
     XSetWMNormalHints(picofb_window->display, picofb_window->window, &hints);
     XFlush(picofb_window->display);
     return true;
 }
 
 static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b) {return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
-static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y][x] = color;}
+static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y*picofb_window->width+x] = color;}
 
 static inline void PICOFB_update(PICOFB_Window* picofb_window) {
     while (XPending(picofb_window->display) > 0) {
@@ -319,7 +317,7 @@ static inline void PICOFB_update(PICOFB_Window* picofb_window) {
             break;
         }
     }
-    XPutImage(picofb_window->display, picofb_window->window, picofb_window->gc, picofb_window->image, 0, 0, 0, 0, PICOFB_WIDTH, PICOFB_HEIGHT);
+    XPutImage(picofb_window->display, picofb_window->window, picofb_window->gc, picofb_window->image, 0, 0, 0, 0, picofb_window->width, picofb_window->height);
     XFlush(picofb_window->display);
 }
 
@@ -338,10 +336,10 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
 static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path){
     FILE *f = fopen(path, "wb");
     if (!f) return;
-    fprintf(f, "P6 %d %d 255\n", PICOFB_WIDTH, PICOFB_HEIGHT);
-    for (int y = 0; y < PICOFB_HEIGHT; y++){
-        for (int x = 0; x < PICOFB_WIDTH; x++){
-            uint32_t px = picofb_window->frame_buffer[y][x];
+    fprintf(f, "P6 %zu %zu 255\n", picofb_window->width, picofb_window->height);
+    for (size_t y = 0; y < picofb_window->height; ++y){
+        for (size_t x = 0; x < picofb_window->width; ++x){
+            uint32_t px = picofb_window->frame_buffer[y*picofb_window->width+x];
             unsigned char rgb[3] = { (px >> 16) & 0xFF, (px >> 8) & 0xFF, px & 0xFF };
             fwrite(rgb, 1, 3, f);
         }
@@ -358,7 +356,9 @@ static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *pat
 #include <string.h>
 
 typedef struct {
-    uint32_t frame_buffer[PICOFB_HEIGHT][PICOFB_WIDTH];
+    size_t width;
+    size_t height;
+    uint32_t* frame_buffer;
     bool key_states[PICOFB_Key_COUNT];
     bool quit;
 
@@ -510,8 +510,10 @@ static LRESULT CALLBACK PICOFB_window_proc(HWND hwnd, UINT msg, WPARAM wparam, L
         default: return DefWindowProc(hwnd, msg, wparam, lparam);
     }
 }
-static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window) {
-    if (!picofb_window) return false;
+static inline bool PICOFB_init(const char* window_title, size_t width, size_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) {
+    if (!picofb_window || !frame_buffer) return false;
+    picofb_window->width=width; picofb_window->height=height; 
+    picofb_window->frame_buffer=frame_buffer;
     snprintf(picofb_window->class_name_storage, sizeof(picofb_window->class_name_storage), "PICOFB_%p", (void*)picofb_window);
     picofb_window->wc.cbSize = sizeof(WNDCLASSEX);
     picofb_window->wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
@@ -526,7 +528,7 @@ static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_w
     picofb_window->wc.lpszClassName = picofb_window->class_name_storage;
     picofb_window->wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
     if (!RegisterClassEx(&picofb_window->wc)) return false;
-    RECT rect = {0, 0, PICOFB_WIDTH, PICOFB_HEIGHT};
+    RECT rect = {0, 0, width, height};
     DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
     AdjustWindowRect(&rect, style, FALSE);
     picofb_window->hwnd = CreateWindowEx(0, picofb_window->class_name_storage, window_title ? window_title : "PICOFB", style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, GetModuleHandle(NULL), NULL);
@@ -547,8 +549,8 @@ static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_w
     }
     BITMAPINFO bmi = {0};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth = PICOFB_WIDTH;
-    bmi.bmiHeader.biHeight = -PICOFB_HEIGHT;
+    bmi.bmiHeader.biWidth = width;
+    bmi.bmiHeader.biHeight = -height;
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
@@ -567,7 +569,7 @@ static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_w
 }
 
 static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b) {return (0xFFu << 24) | ((uint32_t)b << 16) | ((uint32_t)g << 8) | (uint32_t)r;}
-static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y][x] = color;}
+static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y*picofb_window->width+x] = color;}
 
 static inline void PICOFB_update(PICOFB_Window* picofb_window) {
     MSG msg;
@@ -576,8 +578,8 @@ static inline void PICOFB_update(PICOFB_Window* picofb_window) {
         DispatchMessage(&msg);
         if (msg.message == WM_QUIT) picofb_window->quit = true;
     }
-    memcpy(picofb_window->dib_bits, picofb_window->frame_buffer, PICOFB_WIDTH * PICOFB_HEIGHT * sizeof(uint32_t));
-    BitBlt(picofb_window->hdc, 0, 0, PICOFB_WIDTH, PICOFB_HEIGHT, picofb_window->hdc_mem, 0, 0, SRCCOPY);
+    memcpy(picofb_window->dib_bits, picofb_window->frame_buffer, picofb_window->width * picofb_window->height * sizeof(uint32_t));
+    BitBlt(picofb_window->hdc, 0, 0, picofb_window->width, picofb_window->height, picofb_window->hdc_mem, 0, 0, SRCCOPY);
 }
 
 static inline bool PICOFB_is_input(PICOFB_Window* picofb_window, PICOFB_Key key) {
@@ -593,16 +595,16 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
     if (picofb_window->hdc_mem) DeleteDC(picofb_window->hdc_mem);
     if (picofb_window->hdc && picofb_window->hwnd) ReleaseDC(picofb_window->hwnd, picofb_window->hdc);
     if (picofb_window->hwnd) DestroyWindow(picofb_window->hwnd);
-    if (picofb_window->class_name_storage) UnregisterClass(picofb_window->class_name_storage, GetModuleHandle(NULL));
+    if (picofb_window->class_name_storage[0]) UnregisterClass(picofb_window->class_name_storage, GetModuleHandle(NULL));
 }
 
 static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path) {
     FILE *f = fopen(path, "wb");
     if (!f) return;
-    fprintf(f, "P6 %d %d 255\n", PICOFB_WIDTH, PICOFB_HEIGHT);
-    for (int y = 0; y < PICOFB_HEIGHT; y++) {
-        for (int x = 0; x < PICOFB_WIDTH; x++) {
-            uint32_t px = picofb_window->frame_buffer[y][x];
+    fprintf(f, "P6 %zu %zu 255\n", picofb_window->width, picofb_window->height);
+    for (size_t y = 0; y < picofb_window->height; ++y) {
+        for (size_t x = 0; x < picofb_window->width; ++x) {
+            uint32_t px = picofb_window->frame_buffer[y*picofb_window->width+x];
             unsigned char rgb[3] = { px & 0xFF, (px >> 8) & 0xFF, (px >> 16) & 0xFF };
             fwrite(rgb, 1, 3, f);
         }
@@ -619,7 +621,9 @@ static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *pat
 #include <wayland-client.h>
 
 typedef struct {
-    uint32_t frame_buffer[PICOFB_HEIGHT][PICOFB_WIDTH];
+    size_t width;
+    size_t height;
+    uint32_t* frame_buffer;
     bool key_states[PICOFB_Key_COUNT];
     bool quit;
 
@@ -628,28 +632,30 @@ typedef struct {
 
 //static inline PICOFB_Key PICOFB_from_sdl_scancode(SDL_Scancode sc);
 
-static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window){
-    if (!picofb_window) return false;
-    picofb_window->display = wl_display_connect(NULL);
-    if (!picofb_window->display) return false;
-    return true;
-}
+// static inline bool PICOFB_init(const char* window_title, size_t width, size_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) {
+//     picofb_window->width=width; picofb_window->height=height; 
+//     picofb_window->frame_buffer=frame_buffer;
+//     if (!picofb_window || !frame_buffer) return false;
+//     picofb_window->display = wl_display_connect(NULL);
+//     if (!picofb_window->display) return false;
+//     return true;
+// }
 
-static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b){return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
-static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y][x] = color;}
+// static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b){return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
+// static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y*picofb_window->width+x] = color;}
 
-static inline void PICOFB_update(PICOFB_Window* picofb_window){
-    picofb_window->quit = wl_display_dispatch(display)==-1;
-}
-static inline bool PICOFB_is_input(PICOFB_Window* picofb_window, PICOFB_Key key){
-    return true;
-}
-static inline void PICOFB_cleanup(PICOFB_Window* picofb_window){
-    wl_display_disconnect(picofb_window->display);
-}
-static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path){
+// static inline void PICOFB_update(PICOFB_Window* picofb_window){
+//     picofb_window->quit = wl_display_dispatch(display)==-1;
+// }
+// static inline bool PICOFB_is_input(PICOFB_Window* picofb_window, PICOFB_Key key){
+//     return true;
+// }
+// static inline void PICOFB_cleanup(PICOFB_Window* picofb_window){
+//     wl_display_disconnect(picofb_window->display);
+// }
+// static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path){
 
-}
+// }
 
 #endif // PICOFB_WAYLAND_BACKEND
 
@@ -658,7 +664,9 @@ static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *pat
 #include <SDL2/SDL.h>
 
 typedef struct {
-    uint32_t frame_buffer[PICOFB_HEIGHT][PICOFB_WIDTH];
+    size_t width;
+    size_t height;
+    uint32_t* frame_buffer;
     bool key_states[PICOFB_Key_COUNT];
     bool quit;
 
@@ -785,21 +793,23 @@ static inline PICOFB_Key PICOFB_from_sdl_scancode(SDL_Scancode sc) {
     }
 }
 
-static inline bool PICOFB_init(const char* window_title, PICOFB_Window* picofb_window) {
-    if (!picofb_window) return false;
+static inline bool PICOFB_init(const char* window_title, size_t width, size_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) {
+    if (!picofb_window || !frame_buffer) return false;
+    picofb_window->width=width; picofb_window->height=height; 
+    picofb_window->frame_buffer=frame_buffer;
     SDL_Init(SDL_INIT_VIDEO);
-    picofb_window->window = SDL_CreateWindow(window_title ? window_title : "PICOFB", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, PICOFB_WIDTH, PICOFB_HEIGHT, 0);
+    picofb_window->window = SDL_CreateWindow(window_title ? window_title : "PICOFB", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, 0);
     picofb_window->renderer = SDL_CreateRenderer(picofb_window->window, -1, SDL_RENDERER_ACCELERATED);
-    picofb_window->texture = SDL_CreateTexture(picofb_window->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, PICOFB_WIDTH, PICOFB_HEIGHT);
+    picofb_window->texture = SDL_CreateTexture(picofb_window->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
     if (!(picofb_window->window && picofb_window->renderer && picofb_window->texture)) return false;
     return true;
 }
 
 static inline uint32_t PICOFB_color_rgb(uint8_t r, uint8_t g, uint8_t b){return (0xFFu << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
-static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y][x] = color;}
+static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){picofb_window->frame_buffer[y*picofb_window->width+x] = color;}
 
 static inline void PICOFB_update(PICOFB_Window* picofb_window) {
-    SDL_UpdateTexture(picofb_window->texture, NULL, picofb_window->frame_buffer, PICOFB_WIDTH * sizeof(uint32_t));
+    SDL_UpdateTexture(picofb_window->texture, NULL, picofb_window->frame_buffer, picofb_window->width * sizeof(uint32_t));
     SDL_RenderClear(picofb_window->renderer);
     SDL_RenderCopy(picofb_window->renderer, picofb_window->texture, NULL, NULL);
     SDL_RenderPresent(picofb_window->renderer);
@@ -837,10 +847,10 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
 static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *path){
     FILE *f = fopen(path, "wb");
     if (!f) return;
-    fprintf(f, "P6 %d %d 255\n", PICOFB_WIDTH, PICOFB_HEIGHT);
-    for (int y = 0; y < PICOFB_HEIGHT; y++){
-        for (int x = 0; x < PICOFB_WIDTH; x++){
-            uint32_t px = picofb_window->frame_buffer[y][x];
+    fprintf(f, "P6 %zu %zu 255\n", picofb_window->width, picofb_window->height);
+    for (size_t y = 0; y < picofb_window->height; ++y){
+        for (size_t x = 0; x < picofb_window->width; ++x){
+            uint32_t px = picofb_window->frame_buffer[y*picofb_window->width+x];
             unsigned char rgb[3] = { (px >> 16) & 0xFF, (px >> 8) & 0xFF, px & 0xFF };
             fwrite(rgb, 1, 3, f);
         }
