@@ -13,7 +13,6 @@ A minimal single-header cross-platform library for displaying a framebuffer on s
   - **WIN32**: Windows only
   - **SDL2**: Cross-platform (Linux/Windows/Mac), Slower, Fallback
 - Save framebuffer to PPM image format
-- Configurable resolution via compile-time defines
 
 ## Use cases
 - Software rendered applications (UI, Games)
