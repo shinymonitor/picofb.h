@@ -1,13 +1,11 @@
-<div align="center">
-    <img src="assets/LOGO.png", width="200"/>
-    <h1>picofb.h</h1>
-</div>
+# picofb
 
-A minimal single-header cross-platform library for displaying a framebuffer on screen with multi input handling
+A minimal single-header cross-platform library for displaying a framebuffer on screen with multi input and mouse handling
 
 ## Features
 
-- Simple API: init, set pixels, update, cleanup
+- Simple API
+- Multi key and mouse input
 - Many implementations (Auto backend select):
   - **X11**: Linux/X11 only
   - **WIN32**: Windows only
@@ -26,9 +24,4 @@ See `example.c` and docs section in `picofb.h`
 Link with:
 - Linux/X11: -lX11
 - Windows: None
-- Others: -lSDL2
-
-## TODO
-
-- Wayland
-- Mouse handling
+- Others: -SDL2

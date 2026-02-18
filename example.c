@@ -24,13 +24,19 @@ int main(){
         //update the window
         PICOFB_update(&picofb_window);
 
+        // mouse input example
+        printf("Mouse: %zu, %zu %d ", picofb_window.mouse_x, picofb_window.mouse_y, picofb_window.scroll_delta);
+        if (picofb_window.mouse_left) printf("Left ");
+        if (picofb_window.mouse_middle) printf("Middle ");
+        if (picofb_window.mouse_right) printf("Right ");
+
         //multikey input
         if (PICOFB_is_input(&picofb_window, PICOFB_Key_w)) printf("w");
         if (PICOFB_is_input(&picofb_window, PICOFB_Key_s)) printf("s");
         if (PICOFB_is_input(&picofb_window, PICOFB_Key_a)) printf("a");
         if (PICOFB_is_input(&picofb_window, PICOFB_Key_d)) printf("d");
-        if (PICOFB_is_input(&picofb_window, PICOFB_Key_q) || PICOFB_is_input(&picofb_window, PICOFB_Key_ESC)) break;
         printf("\n");
+        if (PICOFB_is_input(&picofb_window, PICOFB_Key_q) || PICOFB_is_input(&picofb_window, PICOFB_Key_ESC)) break;
     }
 
     //save last frame to ppm
