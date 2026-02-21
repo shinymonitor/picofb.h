@@ -1,4 +1,7 @@
-# picofb
+<div align="center">
+    <img src="assets/LOGO.png", width="200"/>
+    <h1>picofb.h</h1>
+</div>
 
 A minimal single-header cross-platform library for displaying a framebuffer on screen with multi input and mouse handling
 
