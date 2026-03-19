@@ -1,0 +1,65 @@
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+// #define PICOFB_BACKEND_OVERRIDE
+// #define PICOFB_SDL_BACKEND
+#include "picofb.h"
+
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 360
+uint32_t frame_buffer[SCREEN_WIDTH * SCREEN_HEIGHT]={0};
+
+static inline void rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint32_t color){
+    for (uint16_t i = 0; i < h; ++i) for (uint16_t j = 0; j < w; ++j){
+        if ((y + i) < SCREEN_HEIGHT && (x + j) < SCREEN_WIDTH) {
+            frame_buffer[(y + i) * SCREEN_WIDTH + (x + j)] = color;
+        }
+    }
+}
+
+int main(){
+    clock_t start_clock = clock();
+    time_t start_time = time(NULL);
+    size_t frames = 0;
+
+    PICOFB_Window picofb_window={0};
+    PICOFB_init("TEST", SCREEN_WIDTH, SCREEN_HEIGHT, (uint32_t*)frame_buffer, &picofb_window);
+
+    int8_t bounce_rect_delta_x = 1, bounce_rect_delta_y = 1; 
+    int16_t bounce_rect_x = 0, bounce_rect_y = 0, control_rect_x = 0, control_rect_y = 0, scroll_y = 0;
+    while (!picofb_window.quit && !picofb_window.keyboard[PICOFB_Key_ESC]){
+        // bouncing box
+        rectangle(bounce_rect_x, bounce_rect_y, 8, 8, 0xFFFFFF00);
+        bounce_rect_x += bounce_rect_delta_x;
+        bounce_rect_y += bounce_rect_delta_y;
+        if (bounce_rect_x > SCREEN_WIDTH - 8 || bounce_rect_x < 0) bounce_rect_delta_x = -bounce_rect_delta_x;
+        if (bounce_rect_y > SCREEN_HEIGHT - 8 || bounce_rect_y < 0) bounce_rect_delta_y = -bounce_rect_delta_y;
+
+        // keyboard
+        rectangle(control_rect_x, control_rect_y, 8, 8, 0xFF00FFFF);
+        if (picofb_window.keyboard[PICOFB_Key_a] && control_rect_x > 0) --control_rect_x;
+        if (picofb_window.keyboard[PICOFB_Key_d] && control_rect_x < SCREEN_WIDTH - 8) ++control_rect_x;
+        if (picofb_window.keyboard[PICOFB_Key_w] && control_rect_y > 0) --control_rect_y;
+        if (picofb_window.keyboard[PICOFB_Key_s] && control_rect_y < SCREEN_HEIGHT - 8) ++control_rect_y;
+
+        // mouse
+        rectangle(picofb_window.mouse.x, picofb_window.mouse.y - 8, 8, 8, (picofb_window.mouse.left ? 0xFFFFFFFF : 0xFFFF0000));
+        rectangle(picofb_window.mouse.x + 8, picofb_window.mouse.y - 8, 8, 8, (picofb_window.mouse.middle ? 0xFFFFFFFF : 0xFF00FF00));
+        rectangle(picofb_window.mouse.x + 16, picofb_window.mouse.y - 8, 8, 8, (picofb_window.mouse.right ? 0xFFFFFFFF : 0xFF0000FF));
+        rectangle(SCREEN_WIDTH - 8, scroll_y, 8, 8, 0xFFFFFFFF);
+        if (picofb_window.mouse.scroll_delta > 0 && scroll_y > 0) --scroll_y;
+        if (picofb_window.mouse.scroll_delta < 0 && scroll_y < SCREEN_HEIGHT - 8) ++scroll_y;
+
+        PICOFB_update(&picofb_window);
+        memset(frame_buffer, 0, sizeof(frame_buffer));
+
+        ++frames;
+    }
+    PICOFB_cleanup(&picofb_window);
+
+    double clock_secs = (double)(clock() - start_clock)/CLOCKS_PER_SEC;
+    double time_secs = (double)(time(NULL) - start_time);
+    printf("Frames rendered: %zu\nCPU Time: %.3fs\nReal Time: %.3fs\nCPU FPS: %.2f\nReal FPS: %.2f\n", frames, clock_secs, time_secs, frames / clock_secs, frames / time_secs);
+    return 0;
+}
