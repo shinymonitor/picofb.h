@@ -19,8 +19,6 @@
 //    bool quit;
 //
 
-// TODO: mouse.capture, mouse.hide_cursor, get_current_window_size(), get_max_window_size(), window.fullscreen
-
 //================================================================
 // PICOFB
 //================================================================
