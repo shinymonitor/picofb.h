@@ -356,6 +356,7 @@ typedef struct {
     WNDCLASSEX wc;
     MSG msg;
     char class_name_storage[64];
+    void* dib_bits;
 } PICOFB_DontTouch;
 
 typedef struct {
@@ -561,7 +562,7 @@ static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
-    picofb_window->dont_touch.hbitmap = CreateDIBSection(picofb_window->dont_touch.hdc_mem, &bmi, DIB_RGB_COLORS, (void**)&picofb_window->frame_buffer, NULL, 0);
+    picofb_window->dont_touch.hbitmap = CreateDIBSection(picofb_window->dont_touch.hdc_mem, &bmi, DIB_RGB_COLORS, (void**)&picofb_window->dont_touch.dib_bits, NULL, 0);
     if (!picofb_window->dont_touch.hbitmap) {
         DeleteDC(picofb_window->dont_touch.hdc_mem);
         ReleaseDC(picofb_window->dont_touch.hwnd, picofb_window->dont_touch.hdc);
@@ -580,6 +581,7 @@ static inline void PICOFB_update(PICOFB_Window* picofb_window) {
         DispatchMessage(&picofb_window->dont_touch.msg);
         if (picofb_window->dont_touch.msg.message == WM_QUIT) picofb_window->quit = true;
     }
+    memcpy(picofb_window->dont_touch.dib_bits, picofb_window->frame_buffer, picofb_window->width * picofb_window->height * sizeof(uint32_t));
     BitBlt(picofb_window->dont_touch.hdc, 0, 0, picofb_window->width, picofb_window->height, picofb_window->dont_touch.hdc_mem, 0, 0, SRCCOPY);
 }
 static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
