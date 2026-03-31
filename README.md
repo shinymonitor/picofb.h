@@ -11,7 +11,7 @@ A minimal single-header cross-platform windowing library for displaying a frameb
 - Multi-key and mouse input
 - Many implementations (Auto backend select):
   - **X11**: Linux/X11 only
-  - **Linux /dev/fb0**: Linux raw tty only, No mouse
+  - **Linux /dev/fb0**: Linux raw tty only, No mouse, Stride management, No stdout
   - **WIN32**: Windows only
   - **SDL2**: Cross-platform, Slower, Fallback
 

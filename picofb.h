@@ -456,7 +456,6 @@ static inline PICOFB_Key PICOFB_from_linux_keycode(uint16_t keycode) {
 static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, PICOFB_Window* picofb_window) {
     (void)window_title;
     if (!picofb_window) return false;
-    picofb_window->width = width; picofb_window->height = height;
     picofb_window->dont_touch.fb_fd = -1; picofb_window->dont_touch.tty_fd = -1;
     picofb_window->dont_touch.fb_fd = open("/dev/fb0", O_RDWR);
     if (picofb_window->dont_touch.fb_fd < 0) return false;
@@ -466,13 +465,14 @@ static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_
     if (picofb_window->dont_touch.vinfo.xres < width || picofb_window->dont_touch.vinfo.yres < height || picofb_window->dont_touch.vinfo.bits_per_pixel != 32) {
         close(picofb_window->dont_touch.fb_fd); return false;
     }
+    picofb_window->width = picofb_window->dont_touch.vinfo.xres; picofb_window->height = picofb_window->dont_touch.vinfo.yres;
     size_t fb_size = picofb_window->dont_touch.finfo.smem_len;
     void* fb_ptr = mmap(NULL, fb_size, PROT_READ | PROT_WRITE, MAP_SHARED, picofb_window->dont_touch.fb_fd, 0);
     if (fb_ptr == MAP_FAILED) {
         close(picofb_window->dont_touch.fb_fd); return false;
     }
     picofb_window->frame_buffer = (uint32_t*)fb_ptr;
-    picofb_window->dont_touch.tty_fd = open("/dev/tty", O_RDWR | O_NOCTTY);
+    picofb_window->dont_touch.tty_fd = open("/dev/tty", O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (picofb_window->dont_touch.tty_fd >= 0) {
         tcgetattr(picofb_window->dont_touch.tty_fd, &picofb_window->dont_touch.old_termios);
         struct termios new_termios = picofb_window->dont_touch.old_termios;
