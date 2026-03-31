@@ -8,12 +8,13 @@
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 360
-uint32_t frame_buffer[SCREEN_WIDTH * SCREEN_HEIGHT]={0};
+
+PICOFB_Window picofb_window={0};
 
 static inline void rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint32_t color){
     for (uint16_t i = 0; i < h; ++i) for (uint16_t j = 0; j < w; ++j){
         if ((y + i) < SCREEN_HEIGHT && (x + j) < SCREEN_WIDTH) {
-            frame_buffer[(y + i) * SCREEN_WIDTH + (x + j)] = color;
+            picofb_window.frame_buffer[(y + i) * SCREEN_WIDTH + (x + j)] = color;
         }
     }
 }
@@ -23,8 +24,7 @@ int main(){
     time_t start_time = time(NULL);
     size_t frames = 0;
 
-    PICOFB_Window picofb_window={0};
-    PICOFB_init("TEST", SCREEN_WIDTH, SCREEN_HEIGHT, (uint32_t*)frame_buffer, &picofb_window);
+    PICOFB_init("TEST", SCREEN_WIDTH, SCREEN_HEIGHT, &picofb_window);
 
     int8_t bounce_rect_delta_x = 1, bounce_rect_delta_y = 1; 
     int16_t bounce_rect_x = 0, bounce_rect_y = 0, control_rect_x = 0, control_rect_y = 0, scroll_y = 0;
@@ -52,7 +52,7 @@ int main(){
         if (picofb_window.mouse.scroll_delta < 0 && scroll_y < SCREEN_HEIGHT - 8) ++scroll_y;
 
         PICOFB_update(&picofb_window);
-        memset(frame_buffer, 0, sizeof(frame_buffer));
+        PICOFB_clear(&picofb_window);
 
         ++frames;
     }

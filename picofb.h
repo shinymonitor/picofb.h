@@ -5,12 +5,12 @@
 // - Allocate a zero initialized PICOFB_Window to store state and pass to API
 // - use PICOFB_Window.quit to loop
 // - See PICOFB_Key for the keyboard input, PICOFB_Mouse for mouse input
-// - Define PICOFB_BACKEND_OVERRIDE and then PICOFB_<X11/WIN32/SDL>_BACKEND to override backend select
+// - Define PICOFB_BACKEND_OVERRIDE and then PICOFB_<X11/LINUX_FB/WIN32/SDL>_BACKEND to override backend select
 //
 // API:
-// - bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) - initialize and present a window with a window title string
-// - void PICOFB_update(PICOFB_Window* picofb_window)                                                                              - updates the window to display the frame buffer and gets user input
-// - void PICOFB_cleanup(PICOFB_Window* picofb_window)                                                                             - cleanup the window
+// - bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, PICOFB_Window* picofb_window) - initialize and present a window with a window title string
+// - void PICOFB_update(PICOFB_Window* picofb_window)                                                          - updates the window to display the frame buffer and gets user input
+// - void PICOFB_cleanup(PICOFB_Window* picofb_window)                                                         - cleanup the window
 //
 // User visible fields of PICOFB_Window (cross-platform):
 //    uint32_t* frame_buffer;
@@ -32,6 +32,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -60,24 +61,21 @@ typedef enum {
     // Arrow keys
     PICOFB_Key_UP, PICOFB_Key_DOWN, PICOFB_Key_LEFT, PICOFB_Key_RIGHT,
     // Control keys
-    PICOFB_Key_ESC, PICOFB_Key_SPACE, PICOFB_Key_ENTER, PICOFB_Key_TAB,
-    PICOFB_Key_BACKSPACE, PICOFB_Key_DELETE, PICOFB_Key_INSERT,
-    PICOFB_Key_HOME, PICOFB_Key_END, PICOFB_Key_PAGEUP, PICOFB_Key_PAGEDOWN,
+    PICOFB_Key_ESC, PICOFB_Key_SPACE, 
+    PICOFB_Key_ENTER, PICOFB_Key_TAB, PICOFB_Key_BACKSPACE, PICOFB_Key_DELETE, 
+    PICOFB_Key_INSERT, PICOFB_Key_HOME, PICOFB_Key_END, PICOFB_Key_PAGEUP, PICOFB_Key_PAGEDOWN,
     // Modifiers
-    PICOFB_Key_LSHIFT, PICOFB_Key_RSHIFT, PICOFB_Key_LCTRL, PICOFB_Key_RCTRL,
-    PICOFB_Key_LALT, PICOFB_Key_RALT, PICOFB_Key_LSUPER, PICOFB_Key_RSUPER,
+    PICOFB_Key_LSHIFT, PICOFB_Key_RSHIFT, 
+    PICOFB_Key_LCTRL, PICOFB_Key_RCTRL,
+    PICOFB_Key_LALT, PICOFB_Key_RALT, 
+    PICOFB_Key_LSUPER, PICOFB_Key_RSUPER,
     // Punctuation/Symbols
-    PICOFB_Key_MINUS, PICOFB_Key_EQUALS, PICOFB_Key_LBRACKET, PICOFB_Key_RBRACKET,
-    PICOFB_Key_BACKSLASH, PICOFB_Key_SEMICOLON, PICOFB_Key_APOSTROPHE,
+    PICOFB_Key_MINUS, PICOFB_Key_EQUALS, 
+    PICOFB_Key_LBRACKET, PICOFB_Key_RBRACKET, PICOFB_Key_BACKSLASH, 
+    PICOFB_Key_SEMICOLON, PICOFB_Key_APOSTROPHE,
     PICOFB_Key_COMMA, PICOFB_Key_PERIOD, PICOFB_Key_SLASH, PICOFB_Key_GRAVE,
-    // Numpad
-    PICOFB_Key_KP_0, PICOFB_Key_KP_1, PICOFB_Key_KP_2, PICOFB_Key_KP_3,
-    PICOFB_Key_KP_4, PICOFB_Key_KP_5, PICOFB_Key_KP_6, PICOFB_Key_KP_7,
-    PICOFB_Key_KP_8, PICOFB_Key_KP_9,
-    PICOFB_Key_KP_MULTIPLY, PICOFB_Key_KP_PLUS, PICOFB_Key_KP_MINUS,
-    PICOFB_Key_KP_DIVIDE, PICOFB_Key_KP_ENTER, PICOFB_Key_KP_PERIOD,
     // Lock keys
-    PICOFB_Key_CAPSLOCK, PICOFB_Key_NUMLOCK, PICOFB_Key_SCROLLLOCK,
+    PICOFB_Key_CAPSLOCK,
     PICOFB_Key_COUNT
 } PICOFB_Key;
 
@@ -92,21 +90,26 @@ typedef struct {
 
 #ifndef PICOFB_BACKEND_OVERRIDE
 
-#ifdef _WIN32
-#define PICOFB_WIN32_BACKEND
-#else
-
 #ifdef __linux__
-#ifdef PICOFB_WAYLAND
-#define PICOFB_SDL_BACKEND
+    #ifdef PICOFB_WAYLAND
+        #define PICOFB_SDL_BACKEND
+    #else
+        #ifdef PICOFB_LINUX_FB
+            #define PICOFB_LINUX_FB_BACKEND
+        #else
+            #define PICOFB_X11_BACKEND
+        #endif
+    #endif
 #else
-#define PICOFB_X11_BACKEND
-#endif
-
-#else
-#define PICOFB_SDL_BACKEND
-#endif
-
+    #ifdef _WIN32
+        #define PICOFB_WIN32_BACKEND
+    #else
+        #ifdef __APPLE__
+            #define PICOFB_SDL_BACKEND
+        #else
+            #define PICOFB_SDL_BACKEND
+        #endif
+    #endif
 #endif
 
 #endif // !(PICOFB_BACKEND_OVERRIDE)
@@ -229,35 +232,17 @@ static inline PICOFB_Key PICOFB_from_x11_keysym(KeySym key){
         case XK_period: return PICOFB_Key_PERIOD;
         case XK_slash: return PICOFB_Key_SLASH;
         case XK_grave: return PICOFB_Key_GRAVE;
-        // Numpad
-        case XK_KP_0: return PICOFB_Key_KP_0;
-        case XK_KP_1: return PICOFB_Key_KP_1;
-        case XK_KP_2: return PICOFB_Key_KP_2;
-        case XK_KP_3: return PICOFB_Key_KP_3;
-        case XK_KP_4: return PICOFB_Key_KP_4;
-        case XK_KP_5: return PICOFB_Key_KP_5;
-        case XK_KP_6: return PICOFB_Key_KP_6;
-        case XK_KP_7: return PICOFB_Key_KP_7;
-        case XK_KP_8: return PICOFB_Key_KP_8;
-        case XK_KP_9: return PICOFB_Key_KP_9;
-        case XK_KP_Multiply: return PICOFB_Key_KP_MULTIPLY;
-        case XK_KP_Add: return PICOFB_Key_KP_PLUS;
-        case XK_KP_Subtract: return PICOFB_Key_KP_MINUS;
-        case XK_KP_Divide: return PICOFB_Key_KP_DIVIDE;
-        case XK_KP_Enter: return PICOFB_Key_KP_ENTER;
-        case XK_KP_Decimal: return PICOFB_Key_KP_PERIOD;
         // Lock keys
         case XK_Caps_Lock: return PICOFB_Key_CAPSLOCK;
-        case XK_Num_Lock: return PICOFB_Key_NUMLOCK;
-        case XK_Scroll_Lock: return PICOFB_Key_SCROLLLOCK;
         
         default: return PICOFB_Key_UNKNOWN;
     }
 }
 static int PICOFB_destroy_image(XImage *img) {(void)img; return 0;}
-static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) {
-    if (!picofb_window || !frame_buffer) return false;
-    picofb_window->frame_buffer=frame_buffer;
+static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, PICOFB_Window* picofb_window) {
+    if (!picofb_window) return false;
+    picofb_window->frame_buffer=calloc(width * height, sizeof(uint32_t));
+    if (!picofb_window->frame_buffer) return false;
     picofb_window->width=width; picofb_window->height=height; 
     picofb_window->dont_touch.display = XOpenDisplay(NULL);
     if (picofb_window->dont_touch.display == NULL) return false;
@@ -338,9 +323,196 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
     if (picofb_window->dont_touch.gc) XFreeGC(picofb_window->dont_touch.display, picofb_window->dont_touch.gc);
     if (picofb_window->dont_touch.window) XDestroyWindow(picofb_window->dont_touch.display, picofb_window->dont_touch.window);
     if (picofb_window->dont_touch.display) XCloseDisplay(picofb_window->dont_touch.display);
+    if (picofb_window->frame_buffer) free(picofb_window->frame_buffer);
 }
 
 #endif // PICOFB_X11_BACKEND
+
+#ifdef PICOFB_LINUX_FB_BACKEND
+
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <linux/fb.h>
+#include <linux/kd.h>
+#include <linux/input.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+
+typedef struct {
+    int fb_fd;
+    int tty_fd;
+    struct fb_var_screeninfo vinfo;
+    struct fb_fix_screeninfo finfo;
+    struct termios old_termios;
+    int old_kb_mode;
+} PICOFB_DontTouch;
+
+typedef struct {
+    uint32_t* frame_buffer;
+    uint16_t width, height;
+    bool keyboard[PICOFB_Key_COUNT]; PICOFB_Mouse mouse;
+    bool quit;
+    PICOFB_DontTouch dont_touch;
+} PICOFB_Window;
+
+static inline PICOFB_Key PICOFB_from_linux_keycode(uint16_t keycode) {
+    switch(keycode) {
+        case KEY_A: return PICOFB_Key_a;
+        case KEY_B: return PICOFB_Key_b;
+        case KEY_C: return PICOFB_Key_c;
+        case KEY_D: return PICOFB_Key_d;
+        case KEY_E: return PICOFB_Key_e;
+        case KEY_F: return PICOFB_Key_f;
+        case KEY_G: return PICOFB_Key_g;
+        case KEY_H: return PICOFB_Key_h;
+        case KEY_I: return PICOFB_Key_i;
+        case KEY_J: return PICOFB_Key_j;
+        case KEY_K: return PICOFB_Key_k;
+        case KEY_L: return PICOFB_Key_l;
+        case KEY_M: return PICOFB_Key_m;
+        case KEY_N: return PICOFB_Key_n;
+        case KEY_O: return PICOFB_Key_o;
+        case KEY_P: return PICOFB_Key_p;
+        case KEY_Q: return PICOFB_Key_q;
+        case KEY_R: return PICOFB_Key_r;
+        case KEY_S: return PICOFB_Key_s;
+        case KEY_T: return PICOFB_Key_t;
+        case KEY_U: return PICOFB_Key_u;
+        case KEY_V: return PICOFB_Key_v;
+        case KEY_W: return PICOFB_Key_w;
+        case KEY_X: return PICOFB_Key_x;
+        case KEY_Y: return PICOFB_Key_y;
+        case KEY_Z: return PICOFB_Key_z;
+        // Numbers
+        case KEY_0: return PICOFB_Key_0;
+        case KEY_1: return PICOFB_Key_1;
+        case KEY_2: return PICOFB_Key_2;
+        case KEY_3: return PICOFB_Key_3;
+        case KEY_4: return PICOFB_Key_4;
+        case KEY_5: return PICOFB_Key_5;
+        case KEY_6: return PICOFB_Key_6;
+        case KEY_7: return PICOFB_Key_7;
+        case KEY_8: return PICOFB_Key_8;
+        case KEY_9: return PICOFB_Key_9;
+        // Function keys
+        case KEY_F1: return PICOFB_Key_F1;
+        case KEY_F2: return PICOFB_Key_F2;
+        case KEY_F3: return PICOFB_Key_F3;
+        case KEY_F4: return PICOFB_Key_F4;
+        case KEY_F5: return PICOFB_Key_F5;
+        case KEY_F6: return PICOFB_Key_F6;
+        case KEY_F7: return PICOFB_Key_F7;
+        case KEY_F8: return PICOFB_Key_F8;
+        case KEY_F9: return PICOFB_Key_F9;
+        case KEY_F10: return PICOFB_Key_F10;
+        case KEY_F11: return PICOFB_Key_F11;
+        case KEY_F12: return PICOFB_Key_F12;
+        // Arrow keys
+        case KEY_UP: return PICOFB_Key_UP;
+        case KEY_DOWN: return PICOFB_Key_DOWN;
+        case KEY_LEFT: return PICOFB_Key_LEFT;
+        case KEY_RIGHT: return PICOFB_Key_RIGHT;
+        // Control keys
+        case KEY_ESC: return PICOFB_Key_ESC;
+        case KEY_SPACE: return PICOFB_Key_SPACE;
+        case KEY_ENTER: return PICOFB_Key_ENTER;
+        case KEY_TAB: return PICOFB_Key_TAB;
+        case KEY_BACKSPACE: return PICOFB_Key_BACKSPACE;
+        case KEY_DELETE: return PICOFB_Key_DELETE;
+        case KEY_INSERT: return PICOFB_Key_INSERT;
+        case KEY_HOME: return PICOFB_Key_HOME;
+        case KEY_END: return PICOFB_Key_END;
+        case KEY_PAGEUP: return PICOFB_Key_PAGEUP;
+        case KEY_PAGEDOWN: return PICOFB_Key_PAGEDOWN;
+        // Modifiers
+        case KEY_LEFTSHIFT: return PICOFB_Key_LSHIFT;
+        case KEY_RIGHTSHIFT: return PICOFB_Key_RSHIFT;
+        case KEY_LEFTCTRL: return PICOFB_Key_LCTRL;
+        case KEY_RIGHTCTRL: return PICOFB_Key_RCTRL;
+        case KEY_LEFTALT: return PICOFB_Key_LALT;
+        case KEY_RIGHTALT: return PICOFB_Key_RALT;
+        case KEY_LEFTMETA: return PICOFB_Key_LSUPER;
+        case KEY_RIGHTMETA: return PICOFB_Key_RSUPER;
+        // Punctuation
+        case KEY_MINUS: return PICOFB_Key_MINUS;
+        case KEY_EQUAL: return PICOFB_Key_EQUALS;
+        case KEY_LEFTBRACE: return PICOFB_Key_LBRACKET;
+        case KEY_RIGHTBRACE: return PICOFB_Key_RBRACKET;
+        case KEY_BACKSLASH: return PICOFB_Key_BACKSLASH;
+        case KEY_SEMICOLON: return PICOFB_Key_SEMICOLON;
+        case KEY_APOSTROPHE: return PICOFB_Key_APOSTROPHE;
+        case KEY_COMMA: return PICOFB_Key_COMMA;
+        case KEY_DOT: return PICOFB_Key_PERIOD;
+        case KEY_SLASH: return PICOFB_Key_SLASH;
+        case KEY_GRAVE: return PICOFB_Key_GRAVE;
+        // Lock keys
+        case KEY_CAPSLOCK: return PICOFB_Key_CAPSLOCK;
+        
+        default: return PICOFB_Key_UNKNOWN;
+    }
+}
+static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, PICOFB_Window* picofb_window) {
+    (void)window_title;
+    if (!picofb_window) return false;
+    picofb_window->width = width; picofb_window->height = height;
+    picofb_window->dont_touch.fb_fd = -1; picofb_window->dont_touch.tty_fd = -1;
+    picofb_window->dont_touch.fb_fd = open("/dev/fb0", O_RDWR);
+    if (picofb_window->dont_touch.fb_fd < 0) return false;
+    if (ioctl(picofb_window->dont_touch.fb_fd, FBIOGET_VSCREENINFO, &picofb_window->dont_touch.vinfo) < 0 || ioctl(picofb_window->dont_touch.fb_fd, FBIOGET_FSCREENINFO, &picofb_window->dont_touch.finfo) < 0) {
+        close(picofb_window->dont_touch.fb_fd); return false;
+    }
+    if (picofb_window->dont_touch.vinfo.xres < width || picofb_window->dont_touch.vinfo.yres < height || picofb_window->dont_touch.vinfo.bits_per_pixel != 32) {
+        close(picofb_window->dont_touch.fb_fd); return false;
+    }
+    size_t fb_size = picofb_window->dont_touch.finfo.smem_len;
+    void* fb_ptr = mmap(NULL, fb_size, PROT_READ | PROT_WRITE, MAP_SHARED, picofb_window->dont_touch.fb_fd, 0);
+    if (fb_ptr == MAP_FAILED) {
+        close(picofb_window->dont_touch.fb_fd); return false;
+    }
+    picofb_window->frame_buffer = (uint32_t*)fb_ptr;
+    picofb_window->dont_touch.tty_fd = open("/dev/tty", O_RDWR | O_NOCTTY);
+    if (picofb_window->dont_touch.tty_fd >= 0) {
+        tcgetattr(picofb_window->dont_touch.tty_fd, &picofb_window->dont_touch.old_termios);
+        struct termios new_termios = picofb_window->dont_touch.old_termios;
+        new_termios.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(picofb_window->dont_touch.tty_fd, TCSANOW, &new_termios);
+        ioctl(picofb_window->dont_touch.tty_fd, KDGKBMODE, &picofb_window->dont_touch.old_kb_mode);
+        ioctl(picofb_window->dont_touch.tty_fd, KDSKBMODE, K_MEDIUMRAW);
+    }
+    return true;
+}
+static inline void PICOFB_update(PICOFB_Window* picofb_window) {
+    picofb_window->mouse.scroll_delta = 0;
+    if (picofb_window->dont_touch.tty_fd >= 0) {
+        unsigned char buf[128];
+        ssize_t n;
+        while ((n = read(picofb_window->dont_touch.tty_fd, buf, sizeof(buf))) > 0) {
+            for (ssize_t i = 0; i < n; i++) {
+                if (buf[i] == 0) continue;
+                bool pressed = !(buf[i] & 0x80);
+                uint16_t code = buf[i] & 0x7F;
+                PICOFB_Key key = PICOFB_from_linux_keycode(code);
+                if (key != PICOFB_Key_UNKNOWN) picofb_window->keyboard[key] = pressed;
+            }
+        }
+    }
+}
+static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
+    if (picofb_window->dont_touch.tty_fd >= 0) {
+        ioctl(picofb_window->dont_touch.tty_fd, KDSKBMODE, picofb_window->dont_touch.old_kb_mode);
+        tcsetattr(picofb_window->dont_touch.tty_fd, TCSANOW, &picofb_window->dont_touch.old_termios);
+        close(picofb_window->dont_touch.tty_fd);
+    }
+    if (picofb_window->frame_buffer) {
+        munmap(picofb_window->frame_buffer, picofb_window->dont_touch.finfo.smem_len);
+        picofb_window->frame_buffer = NULL;
+    }
+    if (picofb_window->dont_touch.fb_fd >= 0) close(picofb_window->dont_touch.fb_fd);
+}
+
+#endif // PICOFB_LINUX_FB_BACKEND
 
 #ifdef PICOFB_WIN32_BACKEND
 
@@ -356,7 +528,6 @@ typedef struct {
     WNDCLASSEX wc;
     MSG msg;
     char class_name_storage[64];
-    void* dib_bits;
 } PICOFB_DontTouch;
 
 typedef struct {
@@ -429,7 +600,7 @@ static inline PICOFB_Key PICOFB_from_win32_vk(WPARAM vk, LPARAM lparam) {
         // Control keys
         case VK_ESCAPE: return PICOFB_Key_ESC;
         case VK_SPACE: return PICOFB_Key_SPACE;
-        case VK_RETURN: return extended ? PICOFB_Key_KP_ENTER : PICOFB_Key_ENTER;
+        case VK_RETURN: return PICOFB_Key_ENTER;
         case VK_TAB: return PICOFB_Key_TAB;
         case VK_BACK: return PICOFB_Key_BACKSPACE;
         case VK_DELETE: return PICOFB_Key_DELETE;
@@ -456,26 +627,8 @@ static inline PICOFB_Key PICOFB_from_win32_vk(WPARAM vk, LPARAM lparam) {
         case VK_OEM_PERIOD: return PICOFB_Key_PERIOD;
         case VK_OEM_2: return PICOFB_Key_SLASH;
         case VK_OEM_3: return PICOFB_Key_GRAVE;
-        // Numpad
-        case VK_NUMPAD0: return PICOFB_Key_KP_0;
-        case VK_NUMPAD1: return PICOFB_Key_KP_1;
-        case VK_NUMPAD2: return PICOFB_Key_KP_2;
-        case VK_NUMPAD3: return PICOFB_Key_KP_3;
-        case VK_NUMPAD4: return PICOFB_Key_KP_4;
-        case VK_NUMPAD5: return PICOFB_Key_KP_5;
-        case VK_NUMPAD6: return PICOFB_Key_KP_6;
-        case VK_NUMPAD7: return PICOFB_Key_KP_7;
-        case VK_NUMPAD8: return PICOFB_Key_KP_8;
-        case VK_NUMPAD9: return PICOFB_Key_KP_9;
-        case VK_MULTIPLY: return PICOFB_Key_KP_MULTIPLY;
-        case VK_ADD: return PICOFB_Key_KP_PLUS;
-        case VK_SUBTRACT: return PICOFB_Key_KP_MINUS;
-        case VK_DIVIDE: return PICOFB_Key_KP_DIVIDE;
-        case VK_DECIMAL: return PICOFB_Key_KP_PERIOD;
         // Lock keys
         case VK_CAPITAL: return PICOFB_Key_CAPSLOCK;
-        case VK_NUMLOCK: return PICOFB_Key_NUMLOCK;
-        case VK_SCROLL: return PICOFB_Key_SCROLLLOCK;
         
         default: return PICOFB_Key_UNKNOWN;
     }
@@ -518,9 +671,8 @@ static LRESULT CALLBACK PICOFB_window_proc(HWND hwnd, UINT msg, WPARAM wparam, L
         default: return DefWindowProc(hwnd, msg, wparam, lparam);
     }
 }
-static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) {
-    if (!picofb_window || !frame_buffer) return false;
-    picofb_window->frame_buffer=frame_buffer;
+static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, PICOFB_Window* picofb_window) {
+    if (!picofb_window) return false;
     picofb_window->width=width; picofb_window->height=height; 
     snprintf(picofb_window->dont_touch.class_name_storage, sizeof(picofb_window->dont_touch.class_name_storage), "PICOFB_%p", (void*)picofb_window);
     picofb_window->dont_touch.wc.cbSize = sizeof(WNDCLASSEX);
@@ -562,7 +714,7 @@ static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
-    picofb_window->dont_touch.hbitmap = CreateDIBSection(picofb_window->dont_touch.hdc_mem, &bmi, DIB_RGB_COLORS, (void**)&picofb_window->dont_touch.dib_bits, NULL, 0);
+    picofb_window->dont_touch.hbitmap = CreateDIBSection(picofb_window->dont_touch.hdc_mem, &bmi, DIB_RGB_COLORS, (void**)&picofb_window->frame_buffer, NULL, 0);
     if (!picofb_window->dont_touch.hbitmap) {
         DeleteDC(picofb_window->dont_touch.hdc_mem);
         ReleaseDC(picofb_window->dont_touch.hwnd, picofb_window->dont_touch.hdc);
@@ -581,7 +733,6 @@ static inline void PICOFB_update(PICOFB_Window* picofb_window) {
         DispatchMessage(&picofb_window->dont_touch.msg);
         if (picofb_window->dont_touch.msg.message == WM_QUIT) picofb_window->quit = true;
     }
-    memcpy(picofb_window->dont_touch.dib_bits, picofb_window->frame_buffer, picofb_window->width * picofb_window->height * sizeof(uint32_t));
     BitBlt(picofb_window->dont_touch.hdc, 0, 0, picofb_window->width, picofb_window->height, picofb_window->dont_touch.hdc_mem, 0, 0, SRCCOPY);
 }
 static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
@@ -707,35 +858,17 @@ static inline PICOFB_Key PICOFB_from_sdl_scancode(SDL_Scancode sc) {
         case SDL_SCANCODE_PERIOD: return PICOFB_Key_PERIOD;
         case SDL_SCANCODE_SLASH: return PICOFB_Key_SLASH;
         case SDL_SCANCODE_GRAVE: return PICOFB_Key_GRAVE;
-        // Numpad
-        case SDL_SCANCODE_KP_0: return PICOFB_Key_KP_0;
-        case SDL_SCANCODE_KP_1: return PICOFB_Key_KP_1;
-        case SDL_SCANCODE_KP_2: return PICOFB_Key_KP_2;
-        case SDL_SCANCODE_KP_3: return PICOFB_Key_KP_3;
-        case SDL_SCANCODE_KP_4: return PICOFB_Key_KP_4;
-        case SDL_SCANCODE_KP_5: return PICOFB_Key_KP_5;
-        case SDL_SCANCODE_KP_6: return PICOFB_Key_KP_6;
-        case SDL_SCANCODE_KP_7: return PICOFB_Key_KP_7;
-        case SDL_SCANCODE_KP_8: return PICOFB_Key_KP_8;
-        case SDL_SCANCODE_KP_9: return PICOFB_Key_KP_9;
-        case SDL_SCANCODE_KP_MULTIPLY: return PICOFB_Key_KP_MULTIPLY;
-        case SDL_SCANCODE_KP_PLUS: return PICOFB_Key_KP_PLUS;
-        case SDL_SCANCODE_KP_MINUS: return PICOFB_Key_KP_MINUS;
-        case SDL_SCANCODE_KP_DIVIDE: return PICOFB_Key_KP_DIVIDE;
-        case SDL_SCANCODE_KP_ENTER: return PICOFB_Key_KP_ENTER;
-        case SDL_SCANCODE_KP_PERIOD: return PICOFB_Key_KP_PERIOD;
         // Lock keys
         case SDL_SCANCODE_CAPSLOCK: return PICOFB_Key_CAPSLOCK;
-        case SDL_SCANCODE_NUMLOCKCLEAR: return PICOFB_Key_NUMLOCK;
-        case SDL_SCANCODE_SCROLLLOCK: return PICOFB_Key_SCROLLLOCK;
         
         default: return PICOFB_Key_UNKNOWN;
     }
 }
 
-static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, uint32_t* frame_buffer, PICOFB_Window* picofb_window) {
-    if (!picofb_window || !frame_buffer) return false;
-    picofb_window->frame_buffer=frame_buffer;
+static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, PICOFB_Window* picofb_window) {
+    if (!picofb_window) return false;
+    picofb_window->frame_buffer=calloc(width * height, sizeof(uint32_t));
+    if (!picofb_window->frame_buffer) return false;
     picofb_window->width=width; picofb_window->height=height; 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return false;
     picofb_window->dont_touch.window = SDL_CreateWindow(window_title ? window_title : "PICOFB", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, 0);
@@ -789,6 +922,7 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
     SDL_DestroyRenderer(picofb_window->dont_touch.renderer);
     SDL_DestroyWindow(picofb_window->dont_touch.window);
     SDL_Quit();
+    if (picofb_window->frame_buffer) free(picofb_window->frame_buffer);
 }
 
 #endif // PICOFB_SDL_BACKEND
@@ -803,11 +937,15 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
     static inline uint32_t PICOFB_color_argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b) {return ((uint32_t)a << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
 #endif
 
-static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, size_t x, size_t y, uint32_t color){
+static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, uint16_t x, uint16_t y, uint32_t color){
     picofb_window->frame_buffer[y*picofb_window->width+x] = color;
+}
+static inline void PICOFB_clear(PICOFB_Window* picofb_window){
+    memset(picofb_window->frame_buffer, 0, picofb_window->width * picofb_window->height * sizeof(uint32_t));
 }
 
 static inline bool PICOFB_key_pressed(PICOFB_Window* picofb_window, PICOFB_Key key) {
+    if (key < 0 || key >= PICOFB_Key_COUNT) return false;
     return picofb_window->keyboard[key];
 }
 
