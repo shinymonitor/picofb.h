@@ -10,9 +10,8 @@ A minimal single-header cross-platform windowing library for displaying a frameb
 - Single header and simple API
 - Multi-key and mouse input
 - Many implementations (Auto backend select):
-  - **X11**: Linux/X11 only
-  - **Linux /dev/fb0**: Linux raw tty only, No mouse, Stride management, No stdout
-  - **WIN32**: Windows only
+  - **LINUX**: Linux (X11 & Wayland)
+  - **WIN32**: Windows
   - **SDL2**: Cross-platform, Slower, Fallback
 
 ## Use cases
@@ -27,6 +26,6 @@ See `example.c` and docs section in `picofb.h`
 
 Link with:
 - Linux/X11: -lX11
-- Linux/fb0: None
+- Linux/Wayland: xdg-shell-protocol.c -DPICOFB_WAYLAND -lwayland-client
 - Windows: -lgdi32 -luser32
 - Others: -lSDL2
