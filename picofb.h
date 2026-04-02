@@ -375,8 +375,7 @@ typedef struct {
 static inline void PICOFB_cleanup(PICOFB_Window* picofb_window);
 
 static inline PICOFB_Key PICOFB_from_wayland_keycode(uint32_t keycode) {
-    uint32_t k = keycode - 8;
-    switch(k) {
+    switch(keycode) {
         case KEY_A: return PICOFB_Key_a; 
         case KEY_B: return PICOFB_Key_b; 
         case KEY_C: return PICOFB_Key_c; 
