@@ -11,8 +11,8 @@ if [ ! -f "$XDG_SHELL" ]; then
 fi
 
 wayland-scanner client-header "$XDG_SHELL" xdg-shell-client-protocol.h
-wayland-scanner private-code "$XDG_SHELL" xdg-shell-protocol.c
+wayland-scanner private-code "$XDG_SHELL" xdg-shell-client-protocol.c
 
 echo "Generated:"
 echo "  xdg-shell-client-protocol.h"
-echo "  xdg-shell-protocol.c"
+echo "  xdg-shell-client-protocol.c"

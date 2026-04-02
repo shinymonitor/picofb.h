@@ -2,8 +2,6 @@
 #include <string.h>
 #include <time.h>
 
-// #define PICOFB_BACKEND_OVERRIDE
-// #define PICOFB_SDL_BACKEND
 #include "picofb.h"
 
 #define SCREEN_WIDTH 640

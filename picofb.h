@@ -326,6 +326,10 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
 
 #ifdef PICOFB_WAYLAND_BACKEND
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -333,6 +337,14 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
 #include <linux/input-event-codes.h>
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
+
+#ifndef PICOFB_NEW_MEMFD
+    #include <linux/memfd.h>
+    #include <sys/syscall.h>
+    int memfd_create(const char *name, unsigned int flags) {
+        return syscall(SYS_memfd_create, name, flags);
+    }
+#endif
 
 typedef struct {
     struct wl_display* display;
@@ -358,6 +370,8 @@ typedef struct {
     bool quit;
     PICOFB_DontTouch dont_touch;
 } PICOFB_Window;
+
+static inline void PICOFB_cleanup(PICOFB_Window* picofb_window);
 
 static inline PICOFB_Key PICOFB_from_wayland_keycode(uint32_t keycode) {
     uint32_t k = keycode - 8;
@@ -487,7 +501,9 @@ static void ptr_frame(void* d, struct wl_pointer* p) {(void)d;(void)p;}
 static void ptr_axis_source(void* d, struct wl_pointer* p, uint32_t s) {(void)d;(void)p;(void)s;}
 static void ptr_axis_stop(void* d, struct wl_pointer* p, uint32_t t, uint32_t a) {(void)d;(void)p;(void)t;(void)a;}
 static void ptr_axis_discrete(void* d, struct wl_pointer* p, uint32_t a, int32_t di) {(void)d;(void)p;(void)a;(void)di;}
-static const struct wl_pointer_listener ptr_listener = {ptr_enter, ptr_leave, ptr_motion, ptr_button, ptr_axis, ptr_frame, ptr_axis_source, ptr_axis_stop, ptr_axis_discrete};
+static void ptr_axis_value120(void* d, struct wl_pointer* p, uint32_t a, int32_t v) {(void)d;(void)p;(void)a;(void)v;}
+static void ptr_axis_relative_direction(void* d, struct wl_pointer* p, uint32_t a, uint32_t dir) {(void)d;(void)p;(void)a;(void)dir;}
+static const struct wl_pointer_listener ptr_listener = {ptr_enter, ptr_leave, ptr_motion, ptr_button, ptr_axis, ptr_frame, ptr_axis_source, ptr_axis_stop, ptr_axis_discrete, ptr_axis_value120, ptr_axis_relative_direction};
 static void seat_caps(void* data, struct wl_seat* seat, uint32_t caps) {
     PICOFB_Window* w = data;
     if (caps & WL_SEAT_CAPABILITY_KEYBOARD) {
@@ -509,7 +525,9 @@ static void xdg_surf_cfg(void* data, struct xdg_surface* xs, uint32_t serial) {
 static const struct xdg_surface_listener xdg_surf_listener = {xdg_surf_cfg};
 static void xdg_top_cfg(void* d, struct xdg_toplevel* t, int32_t w, int32_t h, struct wl_array* s) {(void)d;(void)t;(void)w;(void)h;(void)s;}
 static void xdg_top_close(void* data, struct xdg_toplevel* t) {(void)t; ((PICOFB_Window*)data)->quit = true;}
-static const struct xdg_toplevel_listener xdg_top_listener = {xdg_top_cfg, xdg_top_close};
+static void xdg_top_cfg_bounds(void* d, struct xdg_toplevel* t, int32_t w, int32_t h) {(void)d;(void)t;(void)w;(void)h;}
+static void xdg_top_wm_capabilities(void* d, struct xdg_toplevel* t, struct wl_array* c) {(void)d;(void)t;(void)c;}
+static const struct xdg_toplevel_listener xdg_top_listener = {xdg_top_cfg, xdg_top_close, xdg_top_cfg_bounds, xdg_top_wm_capabilities};
 static void xdg_ping(void* d, struct xdg_wm_base* x, uint32_t serial) {(void)d; xdg_wm_base_pong(x, serial);}
 static const struct xdg_wm_base_listener xdg_listener = {xdg_ping};
 static void reg_global(void* data, struct wl_registry* reg, uint32_t name, const char* iface, uint32_t ver) {
@@ -586,6 +604,7 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
     if (picofb_window->dont_touch.registry) wl_registry_destroy(picofb_window->dont_touch.registry);
     if (picofb_window->dont_touch.display) wl_display_disconnect(picofb_window->dont_touch.display);
 }
+
 
 #endif // PICOFB_WAYLAND_BACKEND
 

@@ -26,6 +26,6 @@ See `example.c` and docs section in `picofb.h`
 
 Link with:
 - Linux/X11: -lX11
-- Linux/Wayland: xdg-shell-protocol.c -DPICOFB_WAYLAND -lwayland-client
+- Linux/Wayland: xdg-shell-client-protocol.c -DPICOFB_WAYLAND -lwayland-client
 - Windows: -lgdi32 -luser32
 - Others: -lSDL2
