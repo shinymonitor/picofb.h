@@ -331,6 +331,7 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
 #endif
 
 #include <string.h>
+#include <poll.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -581,11 +582,13 @@ static inline bool PICOFB_init(const char* window_title, uint16_t width, uint16_
 
 static inline void PICOFB_update(PICOFB_Window* picofb_window) {
     picofb_window->mouse.scroll_delta = 0;
-    wl_display_dispatch_pending(picofb_window->dont_touch.display);
+    wl_display_flush(picofb_window->dont_touch.display);
+    struct pollfd pfd = {wl_display_get_fd(picofb_window->dont_touch.display), POLLIN, 0};
+    if (poll(&pfd, 1, 0) > 0) wl_display_dispatch(picofb_window->dont_touch.display);
+    else wl_display_dispatch_pending(picofb_window->dont_touch.display);
     wl_surface_attach(picofb_window->dont_touch.surface, picofb_window->dont_touch.buffer, 0, 0);
     wl_surface_damage(picofb_window->dont_touch.surface, 0, 0, picofb_window->width, picofb_window->height);
     wl_surface_commit(picofb_window->dont_touch.surface);
-    wl_display_flush(picofb_window->dont_touch.display);
 }
 
 static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
