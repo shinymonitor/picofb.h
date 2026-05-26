@@ -1,3 +1,19 @@
+/*
+           __                       ______   __            __       
+          |  \                     /      \ |  \          |  \      
+  ______   \$$  _______   ______  |  $$$$$$\| $$____      | $$____  
+ /      \ |  \ /       \ /      \ | $$_  \$$| $$    \     | $$    \ 
+|  $$$$$$\| $$|  $$$$$$$|  $$$$$$\| $$ \    | $$$$$$$\    | $$$$$$$\
+| $$  | $$| $$| $$      | $$  | $$| $$$$    | $$  | $$    | $$  | $$
+| $$__/ $$| $$| $$_____ | $$__/ $$| $$      | $$__/ $$ __ | $$  | $$
+| $$    $$| $$ \$$     \ \$$    $$| $$      | $$    $$|  \| $$  | $$
+| $$$$$$$  \$$  \$$$$$$$  \$$$$$$  \$$       \$$$$$$$  \$$ \$$   \$$
+| $$                                                                
+| $$                                                                
+ \$$                                                                
+                                 
+*/
+// A minimal single-header cross-platform windowing library for displaying a framebuffer on screen with multi input and mouse handling
 //================================================================
 // DOCS
 //================================================================
@@ -23,8 +39,8 @@
 // PICOFB
 //================================================================
 
-#ifndef _PICOFB_H
-#define _PICOFB_H
+#ifndef PICOFB_H_
+#define PICOFB_H_
 
 //================================================================
 // UNIVERSAL INCLUDES
@@ -1065,4 +1081,29 @@ static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *pat
 
 //================================================================
 
-#endif // _PICOFB_H
+#endif // PICOFB_H_
+
+/*
+LICENSE:
+    MIT License
+
+    Copyright (c) 2025 Arin Upadhyay
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+*/
