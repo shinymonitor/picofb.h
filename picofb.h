@@ -358,7 +358,7 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
 #ifndef PICOFB_NEW_MEMFD
     #include <linux/memfd.h>
     #include <sys/syscall.h>
-    int memfd_create(const char *name, unsigned int flags) {
+    static int memfd_create(const char *name, unsigned int flags) {
         return syscall(SYS_memfd_create, name, flags);
     }
 #endif
@@ -751,18 +751,14 @@ static LRESULT CALLBACK PICOFB_window_proc(HWND hwnd, UINT msg, WPARAM wparam, L
     switch (msg) {
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN: {
-            if (window) {
-                PICOFB_Key key = PICOFB_from_win32_vk(wparam, lparam);
-                if (key != PICOFB_Key_UNKNOWN && !(lparam & 0x40000000)) window->keyboard[key] = true;
-            }
+            PICOFB_Key key = PICOFB_from_win32_vk(wparam, lparam);
+            if (key != PICOFB_Key_UNKNOWN && !(lparam & 0x40000000)) window->keyboard[key] = true;
             return 0;
         }
         case WM_KEYUP:
         case WM_SYSKEYUP: {
-            if (window) {
-                PICOFB_Key key = PICOFB_from_win32_vk(wparam, lparam);
-                if (key != PICOFB_Key_UNKNOWN) window->keyboard[key] = false;
-            }
+            PICOFB_Key key = PICOFB_from_win32_vk(wparam, lparam);
+            if (key != PICOFB_Key_UNKNOWN) window->keyboard[key] = false;
             return 0;
         }
         case WM_LBUTTONDOWN: window->mouse.left = true; return 0;
@@ -843,7 +839,6 @@ static inline void PICOFB_update(PICOFB_Window* picofb_window) {
     while (PeekMessage(&picofb_window->dont_touch.msg, picofb_window->dont_touch.hwnd, 0, 0, PM_REMOVE)) {
         TranslateMessage(&picofb_window->dont_touch.msg);
         DispatchMessage(&picofb_window->dont_touch.msg);
-        if (picofb_window->dont_touch.msg.message == WM_QUIT) picofb_window->quit = true;
     }
     BitBlt(picofb_window->dont_touch.hdc, 0, 0, picofb_window->width, picofb_window->height, picofb_window->dont_touch.hdc_mem, 0, 0, SRCCOPY);
 }
@@ -1043,12 +1038,7 @@ static inline void PICOFB_cleanup(PICOFB_Window* picofb_window) {
 // UTIL FUNCTIONS
 //================================================================
 
-#ifdef PICOFB_WIN32_BACKEND
-    static inline uint32_t PICOFB_color_argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b) {return ((uint32_t)a << 24) | ((uint32_t)b << 16) | ((uint32_t)g << 8) | (uint32_t)r;}
-#else
-    static inline uint32_t PICOFB_color_argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b) {return ((uint32_t)a << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
-#endif
-
+static inline uint32_t PICOFB_color_argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b) {return ((uint32_t)a << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;}
 static inline void PICOFB_set_pixel(PICOFB_Window* picofb_window, uint16_t x, uint16_t y, uint32_t color){
     picofb_window->frame_buffer[y*picofb_window->width+x] = color;
 }
@@ -1066,15 +1056,14 @@ static inline void PICOFB_save_ppm(PICOFB_Window* picofb_window, const char *pat
     if (!f) return;
     fprintf(f, "P6 %d %d 255\n", picofb_window->width, picofb_window->height);
     for (size_t y = 0; y < picofb_window->height; ++y){
+        unsigned char row[picofb_window->width * 3];
         for (size_t x = 0; x < picofb_window->width; ++x){
-            uint32_t px = picofb_window->frame_buffer[y*picofb_window->width+x];
-            #ifdef PICOFB_WIN32_BACKEND
-                unsigned char rgb[3] = { px & 0xFF, (px >> 8) & 0xFF, (px >> 16) & 0xFF };
-            #else
-                unsigned char rgb[3] = { (px >> 16) & 0xFF, (px >> 8) & 0xFF, px & 0xFF };
-            #endif
-            fwrite(rgb, 1, 3, f);
+            uint32_t px = picofb_window->frame_buffer[y * picofb_window->width + x];
+            row[x*3+0] = (px >> 16) & 0xFF;
+            row[x*3+1] = (px >> 8) & 0xFF;
+            row[x*3+2] =  px & 0xFF;
         }
+        fwrite(row, 1, picofb_window->width * 3, f);
     }
     fclose(f);
 }
