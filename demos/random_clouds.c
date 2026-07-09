@@ -5,6 +5,7 @@
 #include <time.h>
 #include <math.h>
 
+#define PICOFB_IMPLEMENTATION
 #include "../picofb.h"
 
 #define R1_RADIUS 4

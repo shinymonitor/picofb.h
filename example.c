@@ -1,3 +1,4 @@
+#define PICOFB_IMPLEMENTATION
 #include "picofb.h"
 
 #define SCREEN_WIDTH 640

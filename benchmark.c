@@ -1,8 +1,10 @@
+#define PICOFB_IMPLEMENTATION
+#include "picofb.h"
+
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <time.h>
-
-#include "picofb.h"
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 360
@@ -17,12 +19,27 @@ static inline void rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uin
     }
 }
 
+static inline void frame_limit(uint16_t target_fps) {
+    static struct timespec last = {0};
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (last.tv_sec != 0) {
+        double elapsed = (now.tv_sec - last.tv_sec) + (now.tv_nsec - last.tv_nsec) / 1e9;
+        double target = 1.0 / (double) target_fps;
+        if (elapsed < target) {
+            struct timespec req = {0, (long)((target - elapsed) * 1e9)};
+            nanosleep(&req, NULL);
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &last);
+}
+
 int main(){
     clock_t start_clock = clock();
     time_t start_time = time(NULL);
     size_t frames = 0;
 
-    PICOFB_init("TEST", SCREEN_WIDTH, SCREEN_HEIGHT, &picofb_window);
+    if (!PICOFB_init("TEST", SCREEN_WIDTH, SCREEN_HEIGHT, &picofb_window)) {printf("COULD NOT INIT PICOFB WINDOW\n"); return 1;};
 
     int8_t bounce_rect_delta_x = 1, bounce_rect_delta_y = 1; 
     int16_t bounce_rect_x = 0, bounce_rect_y = 0, control_rect_x = 0, control_rect_y = 0, scroll_y = 0;
@@ -48,7 +65,7 @@ int main(){
         rectangle(SCREEN_WIDTH - 8, scroll_y, 8, 8, 0xFFFFFFFF);
         if (picofb_window.mouse.scroll_delta > 0 && scroll_y > 0) --scroll_y;
         if (picofb_window.mouse.scroll_delta < 0 && scroll_y < SCREEN_HEIGHT - 8) ++scroll_y;
-
+        
         PICOFB_update(&picofb_window);
         PICOFB_clear(&picofb_window);
 

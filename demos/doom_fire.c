@@ -5,6 +5,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#define PICOFB_IMPLEMENTATION
 #include "../picofb.h"
 
 #define SCREEN_WIDTH 640
