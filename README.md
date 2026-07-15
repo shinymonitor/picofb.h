@@ -9,7 +9,7 @@ A minimal single-header cross-platform windowing library for displaying a frameb
 - Single header and simple API
 - Multi-key and mouse input
 - Many implementations (Auto backend select):
-  - **LINUX**: Linux (X11 & Wayland) (with SHM)
+  - **LINUX**: Linux (X11 & Wayland) (both with SHM)
   - **WIN32**: Windows
   - **SDL3**: Cross-platform, Slower, Fallback
 

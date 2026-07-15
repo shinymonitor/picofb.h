@@ -12,11 +12,7 @@
 PICOFB_Window picofb_window={0};
 
 static inline void rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint32_t color){
-    for (uint16_t i = 0; i < h; ++i) for (uint16_t j = 0; j < w; ++j){
-        if ((y + i) < SCREEN_HEIGHT && (x + j) < SCREEN_WIDTH) {
-            picofb_window.frame_buffer[(y + i) * SCREEN_WIDTH + (x + j)] = color;
-        }
-    }
+    for (uint16_t i = 0; i < h; ++i) for (uint16_t j = 0; j < w; ++j) if ((y + i) < SCREEN_HEIGHT && (x + j) < SCREEN_WIDTH) picofb_window.frame_buffer[(y + i) * SCREEN_WIDTH + (x + j)] = color;
 }
 
 static inline void frame_limit(uint16_t target_fps) {
@@ -26,10 +22,7 @@ static inline void frame_limit(uint16_t target_fps) {
     if (last.tv_sec != 0) {
         double elapsed = (now.tv_sec - last.tv_sec) + (now.tv_nsec - last.tv_nsec) / 1e9;
         double target = 1.0 / (double) target_fps;
-        if (elapsed < target) {
-            struct timespec req = {0, (long)((target - elapsed) * 1e9)};
-            nanosleep(&req, NULL);
-        }
+        if (elapsed < target) { struct timespec req = {0, (long)((target - elapsed) * 1e9)}; nanosleep(&req, NULL); }
     }
     clock_gettime(CLOCK_MONOTONIC, &last);
 }
@@ -67,7 +60,7 @@ int main(){
         if (picofb_window.mouse.scroll_delta < 0 && scroll_y < SCREEN_HEIGHT - 8) ++scroll_y;
         
         PICOFB_update(&picofb_window);
-        PICOFB_clear(&picofb_window);
+        for (size_t i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; ++i) picofb_window.frame_buffer[i] = 0xFF000000;
 
         ++frames;
     }

@@ -41,6 +41,8 @@
 #ifndef PICOFB_H_
 #define PICOFB_H_
 
+#define PICOFB_VERSION "1.0.0"
+
 //================================================================================================================================
 // BACKEND SELECT
 //================================================================================================================================
@@ -127,10 +129,8 @@ typedef struct {
     struct wl_keyboard* kb;
     struct wl_pointer* pointer;
     struct wl_buffer* buffer;
-    struct wl_callback* frame_cb;
     int shm_fd;
     bool configured;
-    bool frame_ready;
     bool buffer_busy;
 } PICOFB_DontTouch;
 #endif
@@ -576,8 +576,10 @@ static void PICOFB_WAYLAND_ptr_leave(void* d, struct wl_pointer* p, uint32_t s, 
 static void PICOFB_WAYLAND_ptr_motion(void* d, struct wl_pointer* p, uint32_t t, wl_fixed_t x, wl_fixed_t y) {
     (void)p; (void)t;
     PICOFB_Window* win = (PICOFB_Window*)d;
-    win->mouse.x = wl_fixed_to_int(x);
-    win->mouse.y = wl_fixed_to_int(y);
+    int ix = wl_fixed_to_int(x), iy = wl_fixed_to_int(y);
+    if (ix < 0) ix = 0; else if (ix > win->dont_touch.width) ix = win->dont_touch.width;
+    if (iy < 0) iy = 0; else if (iy > win->dont_touch.height) iy = win->dont_touch.height;
+    win->mouse.x = (uint16_t)ix; win->mouse.y = (uint16_t)iy;
 }
 static void PICOFB_WAYLAND_ptr_button(void* d, struct wl_pointer* p, uint32_t srl, uint32_t t, uint32_t b, uint32_t s) {
     (void)p; (void)srl; (void)t;
@@ -655,14 +657,6 @@ static inline int PICOFB_WAYLAND_memfd_create(const char* n, unsigned int f) {
     return memfd_create(n, f);
 }
 #endif
-static void PICOFB_WAYLAND_frame_done(void* d, struct wl_callback* cb, uint32_t t) {
-    (void)t;
-    PICOFB_Window* win = (PICOFB_Window*)d;
-    wl_callback_destroy(cb);
-    win->dont_touch.frame_cb = NULL;
-    win->dont_touch.frame_ready = true;
-}
-static const struct wl_callback_listener PICOFB_WAYLAND_frame_listener = {PICOFB_WAYLAND_frame_done};
 static void PICOFB_WAYLAND_buffer_release(void* d, struct wl_buffer* b) {
     (void)b;
     PICOFB_Window* win = (PICOFB_Window*)d;
@@ -701,7 +695,6 @@ PICOFB_DEF bool PICOFB_init(const char* window_title, uint16_t width, uint16_t h
     wl_shm_pool_destroy(pool);
     wl_surface_commit(picofb_window->dont_touch.surface);
     while (!picofb_window->dont_touch.configured && !picofb_window->quit) wl_display_dispatch(picofb_window->dont_touch.display);
-    picofb_window->dont_touch.frame_ready = true;
     return true;
 }
 
@@ -709,21 +702,18 @@ PICOFB_DEF void PICOFB_update(PICOFB_Window* picofb_window) {
     picofb_window->mouse.scroll_delta = 0;
     wl_display_flush(picofb_window->dont_touch.display);
     struct pollfd pfd = {wl_display_get_fd(picofb_window->dont_touch.display), POLLIN, 0};
-    if (poll(&pfd, 1, 0) > 0) wl_display_dispatch(picofb_window->dont_touch.display);
+    int dispatch_result = (poll(&pfd, 1, 0) > 0) ? wl_display_dispatch(picofb_window->dont_touch.display) : wl_display_dispatch_pending(picofb_window->dont_touch.display);
+    if (dispatch_result < 0) { picofb_window->quit = true; return; }
     else wl_display_dispatch_pending(picofb_window->dont_touch.display);
     wl_surface_attach(picofb_window->dont_touch.surface, picofb_window->dont_touch.buffer, 0, 0);
     wl_surface_damage(picofb_window->dont_touch.surface, 0, 0, picofb_window->dont_touch.width, picofb_window->dont_touch.height);
-    picofb_window->dont_touch.frame_cb = wl_surface_frame(picofb_window->dont_touch.surface);
-    wl_callback_add_listener(picofb_window->dont_touch.frame_cb, &PICOFB_WAYLAND_frame_listener, picofb_window);
-    picofb_window->dont_touch.frame_ready = false;
     picofb_window->dont_touch.buffer_busy = true;
     wl_surface_commit(picofb_window->dont_touch.surface);
-    while ((!picofb_window->dont_touch.frame_ready || picofb_window->dont_touch.buffer_busy) && !picofb_window->quit) if (wl_display_dispatch(picofb_window->dont_touch.display) < 0) break;
+    while (picofb_window->dont_touch.buffer_busy && !picofb_window->quit) if (wl_display_dispatch(picofb_window->dont_touch.display) < 0) break;
 }
 
 PICOFB_DEF void PICOFB_cleanup(PICOFB_Window* picofb_window) {
     if (picofb_window->frame_buffer) munmap(picofb_window->frame_buffer, picofb_window->dont_touch.width * picofb_window->dont_touch.height * 4);
-    if (picofb_window->dont_touch.frame_cb) wl_callback_destroy(picofb_window->dont_touch.frame_cb);
     if (picofb_window->dont_touch.buffer) wl_buffer_destroy(picofb_window->dont_touch.buffer);
     if (picofb_window->dont_touch.shm_fd >= 0) close(picofb_window->dont_touch.shm_fd);
     if (picofb_window->dont_touch.kb) wl_keyboard_destroy(picofb_window->dont_touch.kb);
@@ -1037,7 +1027,7 @@ PICOFB_DEF bool PICOFB_init(const char* window_title, uint16_t width, uint16_t h
     picofb_window->dont_touch.window = SDL_CreateWindow(window_title ? window_title : "", width, height, 0);
     if (!picofb_window->dont_touch.window) {PICOFB_cleanup(picofb_window); return false;}
     SDL_SetWindowPosition(picofb_window->dont_touch.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-    picofb_window->dont_touch.renderer = SDL_CreateRenderer(picofb_window->dont_touch.window, "software");
+    picofb_window->dont_touch.renderer = SDL_CreateRenderer(picofb_window->dont_touch.window, NULL);
     if (!picofb_window->dont_touch.renderer) {PICOFB_cleanup(picofb_window); return false;}
     picofb_window->dont_touch.texture = SDL_CreateTexture(picofb_window->dont_touch.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
     if (!picofb_window->dont_touch.texture) {PICOFB_cleanup(picofb_window); return false;}
