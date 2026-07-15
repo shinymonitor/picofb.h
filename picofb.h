@@ -111,7 +111,7 @@ typedef struct {
 #include <linux/input-event-codes.h>
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
-#ifdef PICOFB_OLD_MEMFD
+#ifdef PICOFB_WAYLAND_OLD_MEMFD
     #include <linux/memfd.h>
     #include <sys/syscall.h>
 #endif
@@ -131,7 +131,6 @@ typedef struct {
     struct wl_buffer* buffer;
     int shm_fd;
     bool configured;
-    bool buffer_busy;
 } PICOFB_DontTouch;
 #endif
 
@@ -648,7 +647,7 @@ static void PICOFB_WAYLAND_reg_global(void* d, struct wl_registry* r, uint32_t n
 }
 static void PICOFB_WAYLAND_reg_remove(void* d, struct wl_registry* r, uint32_t n) {(void)d;(void)r;(void)n;}
 static const struct wl_registry_listener PICOFB_WAYLAND_reg_listener = {PICOFB_WAYLAND_reg_global, PICOFB_WAYLAND_reg_remove};
-#ifdef PICOFB_OLD_MEMFD
+#ifdef PICOFB_WAYLAND_OLD_MEMFD
 static inline int PICOFB_WAYLAND_memfd_create(const char* n, unsigned int f) {
     return syscall(SYS_memfd_create, n, f);
 }
@@ -657,12 +656,6 @@ static inline int PICOFB_WAYLAND_memfd_create(const char* n, unsigned int f) {
     return memfd_create(n, f);
 }
 #endif
-static void PICOFB_WAYLAND_buffer_release(void* d, struct wl_buffer* b) {
-    (void)b;
-    PICOFB_Window* win = (PICOFB_Window*)d;
-    win->dont_touch.buffer_busy = false;
-}
-static const struct wl_buffer_listener PICOFB_WAYLAND_buffer_listener = {PICOFB_WAYLAND_buffer_release};
 
 PICOFB_DEF bool PICOFB_init(const char* window_title, uint16_t width, uint16_t height, PICOFB_Window* picofb_window) {
     if (!picofb_window) return false;
@@ -691,7 +684,6 @@ PICOFB_DEF bool PICOFB_init(const char* window_title, uint16_t width, uint16_t h
     picofb_window->frame_buffer = (uint32_t*)data;
     struct wl_shm_pool* pool = wl_shm_create_pool(picofb_window->dont_touch.shm, picofb_window->dont_touch.shm_fd, size);
     picofb_window->dont_touch.buffer = wl_shm_pool_create_buffer(pool, 0, width, height, width * 4, WL_SHM_FORMAT_ARGB8888);
-    wl_buffer_add_listener(picofb_window->dont_touch.buffer, &PICOFB_WAYLAND_buffer_listener, picofb_window);
     wl_shm_pool_destroy(pool);
     wl_surface_commit(picofb_window->dont_touch.surface);
     while (!picofb_window->dont_touch.configured && !picofb_window->quit) wl_display_dispatch(picofb_window->dont_touch.display);
@@ -707,9 +699,8 @@ PICOFB_DEF void PICOFB_update(PICOFB_Window* picofb_window) {
     else wl_display_dispatch_pending(picofb_window->dont_touch.display);
     wl_surface_attach(picofb_window->dont_touch.surface, picofb_window->dont_touch.buffer, 0, 0);
     wl_surface_damage(picofb_window->dont_touch.surface, 0, 0, picofb_window->dont_touch.width, picofb_window->dont_touch.height);
-    picofb_window->dont_touch.buffer_busy = true;
     wl_surface_commit(picofb_window->dont_touch.surface);
-    while (picofb_window->dont_touch.buffer_busy && !picofb_window->quit) if (wl_display_dispatch(picofb_window->dont_touch.display) < 0) break;
+    if (wl_display_roundtrip(picofb_window->dont_touch.display) < 0) { picofb_window->quit = true; return; }
 }
 
 PICOFB_DEF void PICOFB_cleanup(PICOFB_Window* picofb_window) {
@@ -854,6 +845,7 @@ static LRESULT CALLBACK PICOFB_WIN32_window_proc(HWND hwnd, UINT msg, WPARAM wpa
         case WM_MOUSEWHEEL:
             window->mouse.scroll_delta = GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA;
             return 0;
+        case WM_ERASEBKGND: return 1;
         case WM_CLOSE: if (window) window->quit = true; return 0;
         case WM_DESTROY: PostQuitMessage(0); return 0;
         default: return DefWindowProc(hwnd, msg, wparam, lparam);
